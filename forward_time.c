@@ -202,7 +202,25 @@ void print_people(){
 		printf("event %d has %d people \n", i, People[i]);
 }
 
-
+void destruction(){ /* frees all the allocated memory */
+	printf("Seek and Destroy\n");
+	unsigned e, i, j;
+	person * tmp, * tmp2;
+	for ( e = 0; e < event_number; e++){
+		for (i = 0; i < rows; i++){
+			for (j = 0; j < columns; j++){
+				tmp = A[e][i][j] -> people;
+				while (tmp){
+					tmp2 = tmp;
+					tmp = tmp -> next;
+					free(tmp2);
+				}
+			}
+		}
+	}
+	free(People);
+	free(A);
+}
 
 /* sort of a main for this section */
 void forward_time(){

@@ -82,6 +82,7 @@ void create_map(){
 	int population = 0;
 	population = (rand() % 80) + 20;
 	init_population(xaxis , yaxis, population);
+	//see_the_sea();
 	printf("\n MAP CREATED \n");
 	/* in order to allow multiple populations a pop_type(string not enum) parameter is required */
 }

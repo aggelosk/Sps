@@ -21,4 +21,6 @@ void event();
 
 void print_people();
 
+void destruction();
+
 void forward_time();
