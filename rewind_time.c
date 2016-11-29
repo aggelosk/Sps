@@ -10,8 +10,9 @@ extern unsigned rows;
 extern unsigned columns;
 extern spot **** A;
 extern unsigned * People;
+extern void destruction();
 
-unsigned samples = 10;
+unsigned samples = 100;
 int event_backwards;
 unsigned int negative_generations = 0;	/* in case we need to go further back in time to discover the common ancestor, we keep track of our steps */
 unsigned curr_gen = 0;
@@ -26,6 +27,7 @@ speciment * head;
 speciment * tail;
 
 FILE * f1;
+unsigned fortestonly = 0;
 
 unsigned min(unsigned x, unsigned y){
 	if ( x < y )
@@ -179,6 +181,7 @@ speciment * merge(speciment * s1, speciment * s2){
 	while(cld -> next)
 		cld = cld -> next;
 	cld -> next = s2 -> children;
+	free(s2);
 	return s1;
 }
 
@@ -264,6 +267,7 @@ void sampling(unsigned samples){ /* self-explanatory */
 			}
 		}
 	}
+	//free(seg);
 	smpl = 0;	/* done with sampling */
 }
 
@@ -428,7 +432,7 @@ void create_parent(speciment * s){ /* we create a new parent to go further back 
 
 void go_back(){
 	printf("go back\n");
-	speciment * tmp = malloc(sizeof(speciment));
+	speciment * tmp;
 	while ( event_backwards > 0 && prev_gen != 1){  /* we stop going back either when we find a common ancestor for each segment or when we reach step 0 */ 
 		if ( prev_gen != 0 ) /* so in every step but the first */
 			curr_gen = prev_gen; /* we move a generation back in time */
@@ -444,6 +448,7 @@ void go_back(){
 		total +=prev_gen;
 		event_backwards--;
 	}
+
 }
 
 void further_back(){	/* we might need to go to generations before zero to trace a common ancestor */
@@ -468,7 +473,8 @@ void further_back(){	/* we might need to go to generations before zero to trace 
 /* ---------------------------------- back in time end  ----------------------------------*/
 
 void print_children(speciment * s){
-	f1 = fopen("f1.txt","a");
+	f1 = fopen("children.txt","a");
+	fprintf(f1,"run #%d\n", fortestonly);
 	fprintf(f1, "----------- start of children  %d-----------\n", s -> prs -> pid);
 	speciment * tmp = s -> children;
 	unsigned counter = 0;
@@ -482,6 +488,17 @@ void print_children(speciment * s){
 	fclose(f1);
 }
 
+void tree_destruction(speciment * s){
+	speciment * tmp = s;
+	speciment * tmp2;
+	while (tmp){
+		if (s -> children)
+			tree_destruction(s -> children);
+		tmp2 = tmp;
+		tmp = tmp -> next;
+		free(tmp2);
+	}
+}
 
 /* sort of a main for this step */
 void rewind_time(){
@@ -492,8 +509,8 @@ void rewind_time(){
 	if ( prev_gen !=1 )			/* meaning we partially "failed" during the initial traceback */
 		further_back();
 	printf("Total people encountered: %d\n", total);
-	printf("Speciment: %d is the common ancestor", head -> prs -> pid);
-	free(A); 						/* not useful anymore so no need to keep all this memory allocated */
+	printf("Speciment: %d is the common ancestor\n", head -> prs -> pid);
+	destruction();/* not useful anymore so no need to keep all this memory allocated */					
 	printf (" \n REWIND COMPLETE \n");
 }
 

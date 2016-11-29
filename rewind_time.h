@@ -48,4 +48,6 @@ void further_back();
 
 void print_children(speciment * s);
 
+void tree_destruction(speciment * s);
+
 void rewind_time();

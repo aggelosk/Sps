@@ -10,18 +10,21 @@ extern void rewind_time();
 extern void mutate();
 
 spot * set_spot(double latitude, double longtitude, double altitude, terrain_t type){
+	// ίσως με fread αντί formal argument
 	spot * tmp;
 	tmp = malloc(sizeof(spot));
 	tmp -> latitude = latitude;
 	tmp -> longtitude = longtitude;
 	tmp -> altitude = altitude;
 	tmp -> type = type;
+	//---------------------------------------- initialized for simplicity will require change
 	tmp -> capacity = 100;
 	tmp -> growth_rate = 1;						
 	tmp -> impact = 1;								
-	tmp -> migrate = 0.5;
+	tmp -> migrate = 0.5;						//σίγουρα????
 	tmp -> friction = 10;
 	tmp -> extra_weight = 0;
+	//-----------------------------------------
 	tmp -> population = 0;
 	tmp -> people = NULL;
 	tmp -> incoming = 0;
