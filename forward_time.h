@@ -17,7 +17,11 @@ unsigned long int reproduce(unsigned i, unsigned j);
 
 void intergrate_migration(unsigned i, unsigned j);
 
+void darwinism(unsigned i, unsigned j);
+
 void event();
+
+void print_massmig(char * filename, unsigned ev);
 
 void print_people();
 

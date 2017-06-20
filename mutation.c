@@ -2,62 +2,53 @@
 
 time_t t;
 
-extern void print_children(speciment * s);
+extern void free_present();
+extern void tree_destruction(speciment * s);
+extern void print_sampleList();
+extern void print_mutated(person * p);
 
 extern speciment * head; 		/* pointer to the common ancestors list we discovered during the previous step */
 extern person * samp;			/* pointer to the people we chose as a sample for this process */
 extern unsigned total;			/* total number of people we encountered during our journey back in time */
 extern unsigned samples;		/* number of samples we took in the previous step */
+extern unifree * uhead;
 
-
-unsigned mut = 3;					/* number of mutations we plan on applying ~ Default three */
+unsigned mut = 200;					/* number of mutations we plan on applying ~ Default ten*/
+double theta = 0.1;	 				/* input for the Poisson distribution */
 short p_flag = 0;					/* determines how the table will be printed */
 
-short ** muTable;				/* a table where we store the mutations */
+short ** muTable;					/* a table where we store the mutations */
+unsigned * ntons;
+
+extern gsl_rng * r;
 
 speciment * queue;				/* pointer to the head of the queue */
 speciment * tail;					/* pointer to the last speciment in the queue */
 
-double power(double x, unsigned y){ /* x ^ y */
-    if ( y == 0)
-       return 1;
-	unsigned counter;
-	for (counter = 0; counter < y; counter++)
-		x = x * x;
-	return x;
-}
-
-unsigned factorial(unsigned n){ /* n! ~ giving very high values could result in an overflow of the unsigned value */
-	unsigned x = 1;
-	if ( n > 1)
-		x = n * factorial(n -1);
-	return x;
-}
-
-void poisson_mutation(unsigned k, double mu){ /* uses a Poisson equation in order to speculate the number of mutations */
-	double poisson;
-	double x = power(mu, k);
-	poisson =  exp(-mu) * (x / factorial(k));
-	mut = 3;
-}
-
 /* ------------------- queue management start ------------------- */
 
 speciment * pop_spec(){
-	if (!tail)
-		return;
+	if (!tail) /* for safety purposes should never happen */
+		assert(0);
 	speciment * s = tail;
 	tail = tail -> prev;
+	if (!tail)
+		queue = NULL;
 	return s;
 }
 
 void push_spec(speciment * s){
 	speciment * tmp = malloc(sizeof(speciment));
-	tmp = s;
-	if (queue) /* if we already have something inside the queue */
-		tmp -> next = queue;
+	tmp -> prs = s -> prs;
+	tmp -> children = s -> children;
+	tmp -> present_children = s -> present_children;
+	tmp -> segments = s -> segments;
+	tmp -> next = queue;
+	tmp -> prev = NULL;
+	if (queue)
+		queue -> prev = tmp;
 	else
-		queue = malloc(sizeof(speciment));
+		tail = tmp;
 	queue = tmp;
 }
 
@@ -74,37 +65,33 @@ void empty_specs(){
 /* -------------------- queue management end -------------------- */
 
 speciment * occurance(){	/* a simple BFS algorithm which allows us to find the place of the mutation */
-	printf("occurance\n");
-	empty_specs();	/* we make sure the queue is empty, since we might repeat this step a few times */
+	//printf("occurance\n");
 	speciment * s = head; /* in case rand returns 0, so we don't enter the loop */
 	push_spec(s);
-	tail = s;
-	speciment * tmp = malloc(sizeof(speciment));
+	speciment * tmp;
 	unsigned random = rand() % total;
 	unsigned counter;
 	tmp = s -> children;
-	assert(s -> children -> next);
 	for (counter = 0; counter < random; counter++){
 		s = pop_spec();
-		if ( s -> children ){ /* so in every generation but the present one */
+		if (s -> children){ /* so in every generation but the present one */
 			tmp = s -> children;
-			while ( tmp != NULL){
-				print_children(tmp);
-				/* push_spec(tmp); */
+			while (tmp != NULL){
+				push_spec(tmp);
 				tmp = tmp -> next;
 			}
-			break;
 		}
+		if (counter != random - 1) /* if it ain't the one we are looking for */
+			free(s);
 	}
-	
+	s -> next = NULL;
 	return s; /* the speciment of the person where the mutation is gonna occur */
 }
 
-short isSubsegment(segment * seg, unsigned mutation){ /* checks if a person contains the specif genome? in their segment list */
+short isSubsegment(segment * seg, unsigned mutation){ /* checks if a person contains the specif genome in their segment list */
 	segment * tmp = seg;
-	assert(tmp);
-	while ( tmp && !(tmp -> start > mutation ) ){
-		if ( !( tmp -> end < mutation ) )
+	while (tmp != NULL){
+		if ( !(tmp -> start > mutation) && !(tmp -> end < mutation) )
 			return 1;
 		tmp = tmp -> next;
 	}
@@ -112,43 +99,45 @@ short isSubsegment(segment * seg, unsigned mutation){ /* checks if a person cont
 }
 
 void create_table_row(speciment * s, unsigned row){
-	person * smp = samp;
-	person * prs = s -> present_children;
-	assert(s -> present_children -> pid);
+	person * sampled = samp;
+	speciment * mutated = s -> present_children;
 	unsigned counter = 0;
 	unsigned mutation = rand() % 1000;	/* choose the place for the mutation to occur */
-	if ( isSubsegment(s -> segments, mutation) ){	/* if the mutation does land on a genome that does not affect the present generation we simply ignore it */
-		printf("valid mutation\n");
-		while (smp){
-			if(smp -> pid && (rand() % 2) && s -> segments -> start < mutation && s -> segments -> end > mutation)
+	if ( isSubsegment(s -> segments, mutation) ){	/* if the mutation does land on a genome that does not affect the present generation we ignore it */
+		//printf("valid mutation\n");
+		while (mutated != NULL && sampled != NULL){
+			if ( (sampled -> pid == mutated -> prs -> pid) && isSubsegment(mutated -> segments, mutation) ){
 				muTable[row][counter] = 1;
-			smp = smp -> next;
+				mutated = mutated -> next;
+			}
+			sampled = sampled -> next;
 			counter++;
 		}
 	}
 }
 
-print_temp_queue(){
-	speciment * tmp = queue;
-	while (tmp){
-		printf("%d\n",  tmp -> prs -> pid);
-		tmp = tmp -> next;
-	}
-}
-
 void print_table_mutation(){ 	/* rows are mutations, columns are samples */
 	FILE  * f1;
-	f1 = fopen("results.txt", "w"); /* "w" can be changes to "a" in case you want to stack results into the same file. "w" erases the old content of the file. */ 
-	int i, j;
-	unsigned x;
+	f1 = fopen("mutation_table.txt", "w");
+	int i, j, counter;
 	for (i = 0; i < mut; i++){
-		for (x = 0; x < 108; x++)
-			fprintf(f1, "-");
-		fprintf(f1,"\n site: %d\t", i);
-		for (j = 0; j < samples; j++)
-			fprintf (f1,"%d | ", muTable[i][j]);
+		counter = 0;
+		fprintf(f1,"site:%d\t", i);
+		for (j = 0; j < samples; j++){
+			fprintf (f1,"%d", muTable[i][j]);
+			if (muTable[i][j])
+				counter ++;
+		}
+		ntons[counter]++;
 		fprintf(f1,"\n");
 	}
+	FILE  * f2;
+	f2 = fopen("ntons.txt", "a");
+	for (j = 0; j <= samples; j++)
+		fprintf (f2,"%d\t", ntons[j]);
+	fprintf(f2,"\n");
+	fclose(f1);
+	fclose(f2);
 }
 
 void print_table_sample(){ 	/* rows are samples, columns are mutations */
@@ -158,7 +147,6 @@ void print_table_sample(){ 	/* rows are samples, columns are mutations */
 			printf ("%d | ", muTable[i][j]);
 		printf("\n");
 	}
-	printf("---------------------------------------------------------------------------------- \n");
 }
 
 void allocate_mutation_table(unsigned rows, unsigned columns){
@@ -171,23 +159,44 @@ void allocate_mutation_table(unsigned rows, unsigned columns){
 	}
 }
 
+
+void freedom(unsigned rows){  /* we free all that's left allocated */
+	unsigned r;
+	for (r = 0; r < rows; r++)
+		free(muTable[r]);
+	printf("tree_destruction\n");
+	//tree_destruction(head);
+	free_present(uhead);
+}
+
+
 /* sort of a main for this step */
 void mutate(){
-	double theta = 0.61;
-	poisson_mutation(samples, theta);
+	mut = gsl_ran_poisson(r, (theta * total));
 	allocate_mutation_table(mut, samples);
 	unsigned counter;
 	printf("Samples: %d\n", samples);
-	speciment * s  = malloc(sizeof(speciment));
+	speciment * s;
+	ntons = malloc(sizeof(unsigned) * (1+samples));
+	unsigned j;
+	for ( j = 0; j <= samples; j++)
+		ntons[j] = 0;
 	for (counter = 0; counter < mut; counter++){
 		s = occurance(head, total);
-		assert(s -> children);
 		create_table_row(s, counter);
+		//free(s);
+		empty_specs();	/* we make sure the queue is empty, since we might repeat this step a few times */
 	}	
 	if (p_flag)
 		print_table_sample();
 	else
 		print_table_mutation();
-	empty_specs(); /* we no longer need the queue */
+	freedom(mut);
 	printf ("\n MUTATION COMPLETE \n");
 }
+
+
+/*
+Διαλέγω x random αριθμούς. Parse το δέντρο μόλις πέσω σ έναν απ τους αριθμούς, mutate σε τυχαίο σημείο(segment) τα present children.
+Υποστηρίζω overlapping mutations.
+*/

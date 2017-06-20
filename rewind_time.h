@@ -15,18 +15,22 @@ typedef struct segment{
 typedef struct speciment{ 
 	person * prs;
 	struct speciment * children;
-	person * present_children;			/* the people of the present generation that descent from this ancestor ~ used for the mutation step */
+	struct speciment * present_children;			/* the people of the present generation that descent from this ancestor ~ used for the mutation step */
 	segment * segments;
-	
 	struct speciment * next;	
 	struct speciment * prev;			/* required for creating the queue */
 }speciment;
+
+typedef struct unifree{
+	speciment * spec;
+	struct unifree * next;
+}unifree;
 
 unsigned min(unsigned x, unsigned y);
 
 unsigned max(unsigned x, unsigned y);
 
-segment * merge_segments(segment * node, segment * s);
+segment * merge_segments(segment * first, segment * second);
 
 speciment * merge(speciment * s1, speciment * s2);
 
@@ -48,6 +52,14 @@ void further_back();
 
 void print_children(speciment * s);
 
+void free_present();
+
+void free_seg(segment * seg);
+
 void tree_destruction(speciment * s);
+
+void print_sampleList();
+
+void print_mutated(person * p);
 
 void rewind_time();

@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <time.h>
+#include <gsl/gsl_math.h>
 
 #include "rewind_time.h"
 

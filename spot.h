@@ -4,6 +4,9 @@
 #include <assert.h>
 #include <time.h>
 
+#include <gsl/gsl_randist.h>
+#include <gsl/gsl_rng.h>
+
 typedef enum terrain_t{
 	sea, 	/* first so we can default to it */
 	land,
@@ -15,38 +18,40 @@ typedef enum terrain_t{
 	tundra
 }terrain_t;
 
-typedef struct person{
-	unsigned pid;
+typedef struct leader{
+	unsigned lead;
 	int xaxis;
 	int yaxis;
-	int weight; /* default 0 ~ If the child is beneficial, we add the extra weight into consideration */
+}leader;
+
+typedef struct person{
+	unsigned pid;
+	char flag; /* boolean that shows if the person reproduced or not */
+	float fitness; 
 	struct person * parent1;
 	struct person * parent2;
-	/* the number of parents can be easily changed */
-	/* in rewind step we are gonna need more parameters here */
 	struct person * next; /* functions as a way to initialize the list of people in an area */
 }person;
 
 typedef struct spot{
 	double latitude; 		/* y axis */
-	double longtitude;	/* x axis */
+	double longtitude;		/* x axis */
 	double altitude;		/* might be under sea level so negative values also work */
 	terrain_t type;
 	
-	unsigned long int capacity;  /* max population possible */
+	unsigned capacity;  /* max population possible */
 	double growth_rate;
-	double impact; /* after which point does the growth_rate skyrocket */
-
-	//species * sp; /* header to a list with all the species in an area ~ init NULL ~ only used for predator - prey cases */
-	
 	double migrate; /* probability to leave the area ~ so 0 - 1 values */
 	double friction;	 /* probability to enter the area ~ sort of an area quality check */
 	
+	int pop_num; /* shows which population this belongs to */
 	unsigned long int population; /* number of people in the area */
-	unsigned long int extra_weight; /* each "beneficial" person in an area adds an extra weight that needs to be concidered in reproduction */
+	unsigned long int fit_people;
 	person * people; /* a list of every person in the area */
 	unsigned long int incoming; /* people about to migrate to this area */
 	person * immigrants;
 }spot;
 
-spot * set_spot(double latitude, double longtitude, double altitude, terrain_t type);
+void area_config(unsigned i, unsigned j);
+
+void set_spot(unsigned ev, unsigned i, unsigned j, double latitude, double longtitude, double altitude, terrain_t type);
