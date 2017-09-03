@@ -7,6 +7,12 @@
 
 #include "rewind_time.h"
 
+typedef struct deq{
+	unsigned num;
+	struct deq * next;
+	struct deq * prev;
+}deq;
+
 double power(double x, unsigned y);
 
 unsigned factorial(unsigned n);

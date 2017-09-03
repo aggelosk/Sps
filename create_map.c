@@ -2,12 +2,32 @@
 
 time_t t;
 
+char input = 0; /* flags whether an input file has been given */
+
+int xaxis = -1;
+int yaxis = -1;
+
 extern spot **** A;
 extern unsigned steps;
 extern unsigned rows;
 extern unsigned columns;
 
 extern unsigned long int total_people;
+
+extern void print_massmig(char * filename, unsigned ev);
+extern void parser();
+
+void show_the_model(){
+	unsigned i, j;
+	FILE * f1 = fopen("kappa.txt", "w");
+	for (i = 0; i < rows; i++){
+		for (j = 0; j < columns; j++)
+			fprintf(f1, "[%lf %lf] ", A[0][i][j] -> migrate, A[0][i][j] -> friction);
+		fprintf(f1, "\n");
+	}
+	fclose(f1);
+}
+
 
 void set_dimentions(unsigned r, unsigned c){
 	rows = r;
@@ -33,10 +53,14 @@ void set_terrain(unsigned r, unsigned c){
 				type = sea;
 				altitude = 0;
 			}
-			for (s = 0; s < steps; s++)
+			for (s = 0; s < steps; s++){
 				set_spot(s, i, j, latitude, longtitude, altitude, type);
+			}
 		}
 	}
+	if (input) /* if the migration and friction rates of the map are given */
+		parser();
+	show_the_model();
 }
 
 void init_population(unsigned i, unsigned j, unsigned population){ /* a single population in a single area */
@@ -55,7 +79,7 @@ void init_population(unsigned i, unsigned j, unsigned population){ /* a single p
 		A[0][i][j] -> people = tmp;
 		total_people++;
 	}
-
+	//A[0][i][j] -> fitness = population;
 }
 
 void allocate(){ /* dynamically allocates the array */
@@ -71,17 +95,18 @@ void allocate(){ /* dynamically allocates the array */
 void create_map(){
 	allocate();
 	set_terrain(rows, columns);
-	int xaxis = rand() % (rows - 1);
-	int yaxis = rand() % (columns - 1);
-	int population = 15;//(rand() % 80) + 20;
+	if (xaxis == -1){ /* not set by user thus randomly chosen */
+		xaxis = rand() % (rows - 1);
+		yaxis = rand() % (columns - 1);
+	}
+	int population = 5;//(rand() % 80) + 20;
 	init_population(xaxis , yaxis, population);
 	printf("\n MAP CREATED \n");
-	/* in order to allow multiple populations a pop_type(string not enum) parameter is required */
 }
 
 /* ------------------------------------------------------------------------------------------------- BRIEF SUMMARY OF THE CODE ------------------------------------------------------------------------------------------------- */
 
 /*
-	The first major part of the project. As the name suggests it creates the whole map, by giving eac individual area it's respective aspects. After that, it initializes the - one or many - populations
+	The first major part of the project. As the name suggests it creates the whole map, by giving each individual area it's respective aspects. After that, it initializes the - one or many - populations
 	to certain areas of the map thus creating the generation 0.
 */

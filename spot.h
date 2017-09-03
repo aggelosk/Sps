@@ -7,6 +7,8 @@
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
 
+struct ancestry *anc;  // why in the header file???
+
 typedef enum terrain_t{
 	sea, 	/* first so we can default to it */
 	land,
@@ -25,7 +27,7 @@ typedef struct leader{
 }leader;
 
 typedef struct person{
-	unsigned pid;
+	int pid;
 	char flag; /* boolean that shows if the person reproduced or not */
 	float fitness; 
 	struct person * parent1;
@@ -46,11 +48,13 @@ typedef struct spot{
 	
 	int pop_num; /* shows which population this belongs to */
 	unsigned long int population; /* number of people in the area */
-	unsigned long int fit_people;
+	float fit_people;
 	person * people; /* a list of every person in the area */
 	unsigned long int incoming; /* people about to migrate to this area */
 	person * immigrants;
 }spot;
+
+void parser();
 
 void area_config(unsigned i, unsigned j);
 

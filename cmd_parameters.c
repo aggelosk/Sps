@@ -5,8 +5,20 @@
 #include <string.h>
 #include <assert.h>
 
+/* from spot.c */
 extern unsigned seed;
 
+/* from create_map.c */
+extern char input;
+extern char * filename;
+extern char capac;
+extern unsigned capacity;
+extern int xaxis;
+extern int yaxis;
+
+
+
+/* from forward_time.c */
 extern char single_parent; 
 extern char flock;
 
@@ -14,12 +26,14 @@ extern unsigned steps;
 extern unsigned rows;
 extern unsigned columns;
 extern double fitness;
-extern unsigned ben_gen;
-extern  char beneficial;
-extern unsigned init_ben;
+extern double ben_chance;
+extern char beneficial;
 
+
+/* from rewind_time.c */
 extern unsigned samples;
 
+/* parameters for Poisson and Gaussian */
 extern double sigma;
 extern double theta;
 
@@ -37,7 +51,7 @@ void cmd_params(int argc, char** argv){
 			continue;
 		}
 		
-		/* map size */
+		/* map start */
 		if ( (!strcmp(argv[i], "-gens" ) ) ){
 			steps = atoi(argv[++i]);
 			continue;
@@ -47,14 +61,35 @@ void cmd_params(int argc, char** argv){
 			continue;
 		}
 		if ( (!strcmp(argv[i], "-cols" ) ) ){
-			 columns = atoi(argv[++i]);
-			 continue;
+			columns = atoi(argv[++i]);
+			continue;
 		}
+		
+		/* area for initial population */
+		if( (!strcmp(argv[i], "-strt" ) ) ){
+			xaxis = atoi(argv[++i]);
+			yaxis = atoi(argv[++i]);
+			assert(xaxis < rows && yaxis < columns);
+			continue;
+		}
+
+		if ( (!strcmp(argv[i], "-inpt" ) ) ){ /* checks whether the user wishes to define the capacity of each deme */
+			input = 1;
+			filename = malloc(sizeof(100));
+			filename = strdup(argv[++i]);
+			continue;
+		}
+		
+		if ( (!strcmp(argv[i], "-cpct" ) ) ){
+			capac = 1;
+			capacity = atoi(argv[++i]);
+			continue;
+		}	
+		/* map end */
 		
 		if ( (!strcmp(argv[i], "-bene" ) ) ){
 			beneficial = 1;
-			ben_gen = atoi(argv[++i]);
-			init_ben = atoi(argv[++i]);
+			ben_chance = atoi(argv[++i]);
 			fitness = atof(argv[++i]);
 		}
 		
@@ -86,6 +121,8 @@ void cmd_params(int argc, char** argv){
 			samples = atoi(argv[++i]);
 			continue;
 		}
+		
+
 		
 		fprintf(stderr, "Argument %s is invalid\n\n\n", argv[i]);	
 	}	

@@ -8,47 +8,60 @@ time_t t;
 extern spot **** A;
 
 unsigned event_number = 0; /* number of current event - shows the number of entries in the event table */
-unsigned long int total_people = 0;
+unsigned long int total_people = 0;	/* total number of people encountered in the forward in time step */
+unsigned long int unique_id = 0;
 
 unsigned steps = 101;
 unsigned rows = 50; 
 unsigned columns = 50;
 /* default values */
 
-unsigned ben_gen = 10;
+double ben_chance = 0.001;
 unsigned init_ben = 10;
 float fitness = 1.2;
 
 unsigned long int no_children = 0;
 unsigned pop_counter = 0;
 
-unsigned * People; /* holds the population for each generation */
-leader * Leaders; /* for the mass - migration model. Shows which population tends to follow which */
+unsigned * People; 	/* holds the population for each generation */
+leader * Leaders; 		/* for the mass - migration model. Shows which population tends to follow which */
 
 /* -------------------------------------------------------------------------------------------- */
 
 
 /* -------------------------- Different scenario activators ------------------------------------- */
-char single_parent = 1; 			/* default is to allows single parented children */
-char beneficial = 1;					/* default is to allow such a thing */
-char flock = 1;							/* default is not to allow such a thing */
+char single_parent = 1; 		/* default is to allows single parented children */
+char beneficial = 1;				/* default is to allow such a thing */
+char flock = 0;						/* default is to allow such a thing */
 /* ------------------------------------------------------------------------------------------------------ */
-
-
 
 unsigned logistic_function(unsigned i, unsigned j){
 	/* determines the reproduction of the population in the area */
 	double x = 1.0 - ((double)current -> population / (double)current -> capacity);
-	double population = (current -> growth_rate * (double)current -> population  * x) + (double)current -> population;
+	double population = (current -> growth_rate * (double)current -> population  * x) + (double)current -> population  + 0.5;
 	return (unsigned)population; /* cast into unsigned as a round - up measure */
 }
 
-/* we might need to split this function into 2 seperate, one for choosing the destination area and one for migration */
-void migration(unsigned i, unsigned j, person * child){ 
-	/* will move the entity to the new area */
-	unsigned total_fric = 0;
+
+void leadershift(unsigned oldleader, unsigned newleader, unsigned xaxis, unsigned yaxis){
+	unsigned i = 0;
+	Leaders[oldleader].lead = newleader;
+	Leaders[oldleader].xaxis = xaxis;
+	Leaders[oldleader].yaxis = yaxis;
+	while (i < rows * columns && Leaders[i].lead != -1 ) { /* while there are still valid leaders to check */
+		if (Leaders[i].lead == oldleader ){
+			Leaders[i].lead = newleader;
+			Leaders[i].xaxis = xaxis;
+			Leaders[i].yaxis = yaxis;
+		}
+		i++;
+	}
+}
+
+void migration(unsigned i, unsigned j, person * child){	/* will move the entity to the new area */
+	double total_fric = 0;
 	int x, y;
-	for (x = -1; x< 2; x++){ 	
+	for (x = -1; x< 2; x++){
 		if (  i + x >= 0 && i + x < rows ){ /* caution check so that we don't wander outside the array borders */
 			for (y = -1; y < 2; y++){
 				if (  j + y >= 0 && j + y < columns && (x != 0 || y !=0 ) )
@@ -56,33 +69,26 @@ void migration(unsigned i, unsigned j, person * child){
 			}
 		}
 	}
-	int migrate = rand() % total_fric;
-	unsigned counter = 0;
+	double migrate = ((float)rand()/(float)(RAND_MAX)) * total_fric;
+	double counter = 0.0;
 	for (x = -1; x< 2; x++){
 		if ( i + x >= 0 && i + x < rows){ 
 			for (y = -1; y < 2; y++){
 				if ( j + y >= 0 && j + y < columns && (x != 0 || y !=0 ) ){
-					
 					if ( migrate - counter <= A[event_number][i + x][j + y] -> friction ){
-
 						if (flock){
-							
 							if  (A[event_number][i + x][j + y] -> pop_num != -1 ) /* previous population inhabiting the area */ 
 								A[event_number + 1][i + x][j + y] -> pop_num = A[event_number][i + x][j + y] -> pop_num;
-							else if ( A[event_number + 1][i + x][j + y] -> pop_num == -1){ 			/* first in the area */
-								A[event_number + 1][i + x][j + y] -> pop_num = ++pop_counter;		/* since no previous population has been in the area, we define a new one */
-								Leaders[pop_counter].lead = pop_counter;										/* we set that person as the Leader of the current population, being the pioneer */
-								Leaders[pop_counter].xaxis = x;
-								Leaders[pop_counter].yaxis = y;
+							else if ( A[event_number + 1][i + x][j + y] -> pop_num == -1){ 				/* first in the area */
+								A[event_number + 1][i + x][j + y] -> pop_num = ++pop_counter;			/* since no previous population has been in the area, we define a new one */
+								leadershift(current -> pop_num, pop_counter, x, y);								/* we set the new leader for the rest of the populations following */
 							}
-							assert(pop_counter < (rows * columns));
-								
+							assert(pop_counter < (rows * columns));									/* just a safely clause should never be triggered */
 						}
 						child -> next = A[(event_number + 1)][i + x][j + y] -> immigrants;	/* the person migrates to the new area */
-						A[event_number + 1][i + x][j + y] -> immigrants = child;
+						A[event_number + 1][i + x][j + y] -> immigrants = child;	
 						A[event_number + 1][i + x][j + y] -> incoming++;
 						return;
-
 					}
 					else
 						counter = counter + A[event_number][i + x][j + y] -> friction;
@@ -95,7 +101,7 @@ void migration(unsigned i, unsigned j, person * child){
 
 person * birth(unsigned i, unsigned j){
 	person * child = malloc(sizeof (person));
-	child -> pid = total_people; /* first person of each generation takes the id 0 etc */
+	child -> pid = ++unique_id;//total_people; /* first person of each generation takes the id 0 etc */
 	child -> flag = 0;
 	child -> fitness = 1;
 	child -> parent1 = NULL;
@@ -153,6 +159,9 @@ person * birth(unsigned i, unsigned j){
 		child -> fitness = child -> parent1 -> fitness;
 	else if  (child -> parent2 -> fitness > 1 )
 		child -> fitness = child -> parent1 -> fitness;
+	else if ( (rand() / (double)RAND_MAX) < ben_chance){
+		child -> fitness += fitness;
+	}
 	assert(child); /* for safely purposes,should never be triggered */
 	return child;
 }
@@ -160,20 +169,26 @@ person * birth(unsigned i, unsigned j){
 /* --------------------- mass migration start  ------------------- */
 
 void follow_the_leader(unsigned i, unsigned j, leader  l, person * child){
-	if ( i + l.xaxis >=0 && i + l.xaxis < rows )
-		i += l.xaxis;
-	if (j + l.yaxis < columns)
-		j += l.yaxis;
-	assert(i < rows);
-	assert(j < columns);
-	if (current -> pop_num != -1)
-		nxtstep -> pop_num = current -> pop_num;
-	else if ( nxtstep -> pop_num == -1) /* first in the area */
-		nxtstep -> pop_num = l.lead;	/* the population is set to be the same as the Leaders */
-	assert (nxtstep -> pop_num != -1);		/* new */ /* just a safely clause should never be triggered */
-	child -> next = nxtstep -> immigrants;
-	nxtstep -> immigrants = child;
-	nxtstep -> incoming++;
+	int x = i;
+	int y = j;
+	assert (l.xaxis == -1 || l.xaxis == 0 || l.xaxis == 1);
+	assert (l.yaxis == -1 || l.yaxis == 0 || l.yaxis == 1);
+	if ( i + l.xaxis >=0 && i + l.xaxis < rows)
+		x += l.xaxis;
+	if (j + l.yaxis >= 0 && j + l.yaxis < columns)
+		y += l.yaxis;
+	if (A[event_number][x][y] -> friction == 0){ /* the area is not accesible thus the person remains where he is */
+		x = i;	// will require a more realistic solution 
+		y = j;
+	}
+	if (A[event_number][x][y] -> pop_num != -1)
+		A[event_number +1][x][y] -> pop_num = A[event_number][x][y] -> pop_num;
+	else if (A[event_number +1][x][y] -> pop_num == -1) /* first in the area */
+		A[event_number +1][x][y] -> pop_num = l.lead;	/* the population is set to be the same as the Leaders */
+	assert (A[event_number +1][x][y] -> pop_num != -1);	/* just a safely clause should never be triggered */
+	child -> next = A[event_number +1][x][y] -> immigrants;
+	A[event_number +1][x][y] -> immigrants = child;
+	A[event_number +1][x][y] -> incoming++;
 }
 
 unsigned long int mass_migration(unsigned i, unsigned j){
@@ -186,16 +201,11 @@ unsigned long int mass_migration(unsigned i, unsigned j){
 	unsigned counter;
 	double random;
 	for (counter = 0; counter < new_pop; counter++){
-		child = birth(i,j);
-		if (event_number == ben_gen){ /* in a current generation a beneficial mutation appears */
-			if (rand() % new_pop < init_ben)
-				child -> fitness += fitness;
-		}
-		
+		child = birth(i,j);		
 		/* now we need to decide if the person is gonna stay or migrate*/
 		random = rand() / (float)RAND_MAX;
-		if (random < 0.8){
-			if ( random < 0.70 && Leaders[current -> pop_num].lead != -1) //  <-- μήπως;
+		if (random < 0.990){
+			if ( Leaders[current -> pop_num].lead != -1 && random < 0.9)
 				follow_the_leader(i, j, Leaders[current -> pop_num], child);
 			else
 				migration(i, j, child);
@@ -203,10 +213,10 @@ unsigned long int mass_migration(unsigned i, unsigned j){
 		else{ /* stays back */
 			child -> next = nxtstep -> people;
 			nxtstep -> people = child;
+			nxtstep -> fit_people += child -> fitness;
 			remaing++;
 		}
 		total_people++;
-
 	}
 	return remaing;
 }
@@ -223,10 +233,6 @@ unsigned long int reproduce(unsigned i, unsigned j){
 	person * child;
 	while (counter < new_pop ){
 		child = birth(i,j);
-		if (event_number == ben_gen){ /* in a current generation a beneficial mutation appears */
-			if (rand() % new_pop < init_ben)
-				child -> fitness += fitness;
-		}
 		/* now we need to choose the destination of the newborn child */
 		migrate = rand() / (float)RAND_MAX;
 		if (migrate < current -> migrate){
@@ -284,7 +290,7 @@ void darwinism(unsigned i, unsigned j){ /* we kill every person that has no chil
 }
 
 void event(){
-	if (event_number % 500 == 0)
+	//if (event_number % 500 == 0) /* just to track the process of the simulation */
 		printf("Event %d\n", event_number);
 	unsigned i, j;
 	total_people = 0; /* each generation obviously starts with 0 people */
@@ -299,7 +305,7 @@ void event(){
 					nxtstep -> population = reproduce(i,j);
 				darwinism(i,j);
 			}
-			else if (flock && current -> pop_num != -1)		/* new */
+			else if (flock && current -> pop_num != -1)
 				nxtstep -> pop_num = current -> pop_num;
 		}
 	}
@@ -321,12 +327,8 @@ void print_massmig(char * filename, unsigned ev){
 	f1 = fopen(filename, "w");
 	unsigned i,j;
 	for (i = 0; i < rows; i++){
-		for (j = 0; j < columns; j++){
-			if ( A[ev][i][j]-> population)
-					fprintf(f1,"%d,%d ", A[ev][i][j]-> population, A[ev][i][j]-> pop_num);
-			else
-				fprintf(f1,"0,0 ");
-		}
+		for (j = 0; j < columns; j++)
+			fprintf(f1,"%d ", A[ev][i][j]-> population);
 		fprintf(f1,"\n");
 	}
 	fclose(f1);
@@ -360,23 +362,19 @@ void forward_time(){
 	printf("%d\n", People[0]);
 	
 	Leaders = malloc(  (rows * columns) * sizeof(leader) ); 
-	Leaders[0].lead = 0;
-	Leaders[0].xaxis = 0;
-	Leaders[0].yaxis = 0;
-	unsigned i;
-	for (i = 1; i < rows * columns; i++){
+	unsigned i; 
+	for (i = 0; i < rows * columns; i++){
 		Leaders[i].lead = -1;
 		Leaders[i].xaxis = 0;
 		Leaders[i].yaxis = 0;
 	}
 	
-	while (i < steps - 1){
+	for (i = 0; i < steps - 1; i++){
 		if (People[event_number] == 0){
 			printf(" \nThere are no people left so there is no point in continuing this simulation\n");
 			break;
 		}
 		event();
-		i++;
 	}
 	
 	unsigned x, y;
@@ -388,23 +386,28 @@ void forward_time(){
 			}
 		}
 	}
-	print_people();
-	if (flock){ /* if we use the mass migration method */
+	//print_people();
 		unsigned ev;
-		char  filename[] = "f00.txt";        /* if you wish for more files just add more digits(chars) and use a similar method */
-		for (ev = 0; ev <= event_number; ev+= 1500){
-			filename[2]++;
+		char  filename[] = "f000/.txt";        /* if you wish for more files just add more digits(chars) and use a similar method */
+		for (ev = 0; ev <= event_number; ev+= 10){
+			filename[4]++;
+			if (filename[4] > '9'){
+				filename[4] = '0';
+				filename[3]++;
+			}
+			if (filename[3] > '9'){
+				filename[3] = '0';
+				filename[2]++;
+			}
 			if (filename[2] > '9'){
 				filename[2] = '0';
 				filename[1]++;
 			}
-			print_massmig(filename, event_number);
+			print_massmig(filename, ev);
 		}
-	}
 	free(Leaders);
 	printf("Number of people that did not reproduce: %d\n", no_children);
 	printf("\n FORWARD COMPLETE \n");
-
 }
 
 /* time complexity is O(steps * rows * columns) */
@@ -412,5 +415,7 @@ void forward_time(){
 /* ------------------------------------------------------------------------------------------------- BRIEF SUMMARY OF THE CODE ------------------------------------------------------------------------------------------------- */
 
 /*
-	In this section of the project, the second one called, we receive an initialized instance of a map, along with the populations inhabiting some of its areas, and we begin going a number of steps forward in time, where each step equals to a new generation. For each of these steps, the population of each area reproduces and each of the children either inhabitates the same area as the parent, or one of the neighbouring areas.
+	In this section of the project, the second one called, we receive an initialized instance of a map, along with the populations inhabiting some of its areas,
+	and we begin going a number of steps forward in time, where each step equals to a new generation. For each of these steps, the population of each area reproduces
+	and each of the children either inhabitates the same area as the parent, or one of the neighbouring areas.
 */
