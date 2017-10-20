@@ -72,9 +72,9 @@ void migration(unsigned i, unsigned j, person * child){	/* will move the entity 
 	double migrate = ((float)rand()/(float)(RAND_MAX)) * total_fric;
 	double counter = 0.0;
 	for (x = -1; x< 2; x++){
-		if ( i + x >= 0 && i + x < rows){ 
+		if ( i + x >= 0 && i + x < rows){ 		
 			for (y = -1; y < 2; y++){
-				if ( j + y >= 0 && j + y < columns && (x != 0 || y !=0 ) ){
+				if ( j + y >= 0 && j + y < columns && (x != 0 || y !=0 ) ){					
 					if ( migrate - counter <= A[event_number][i + x][j + y] -> friction ){
 						if (flock){
 							if  (A[event_number][i + x][j + y] -> pop_num != -1 ) /* previous population inhabiting the area */ 
@@ -96,7 +96,7 @@ void migration(unsigned i, unsigned j, person * child){	/* will move the entity 
 			}
 		}
 	}
-	assert(0); /* we should never arrive at this point of the code */
+//	assert(0); /* we should never arrive at this point of the code */
 }
 
 person * birth(unsigned i, unsigned j){
