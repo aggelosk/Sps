@@ -1,7 +1,8 @@
 #include "rewind_time.h"
 
 #define current	A[event_number][i][j]
-#define MAX_SEGMENT 1000
+
+#define DEFAULT_SAMPLES 100
 
 time_t t;
 
@@ -12,722 +13,601 @@ extern spot **** A;
 extern unsigned * People;
 extern void destruction();
 
-unsigned samples = 100;
+extern unsigned samples = 0;
 int event_backwards;
-unsigned int negative_generations = 0;	/* in case we need to go further back in time to discover the common ancestor, we keep track of our steps */
+unsigned int negative_generations = 0;		/* in case we need to go further back in time to discover the common ancestor, we keep track of our steps */
 unsigned curr_gen = 0;
 unsigned prev_gen = 0;
-unsigned keepsake = 0;						/* for tracing further back in time purposes */
-char smpl = 1;										/* checks if we are still in sampling or not. Default value 1(true) since we begin this step by picking samples */
+unsigned keepsake = 0;				/* for tracing further back in time purposes */
+char smpl = 1;					/* checks if we are still in sampling or not. Default value 1(true) since we begin this step by picking samples */
 
-unsigned total = 0; 								/* total number of people we ve encountered in our journey back in time */
+double rec_rate = 0.001;			/* probability of recombination occuring at any given person */
 
-person * samp;									/* besides using the sampled people to find common ancestors, we need to keep them in a list for future use */
-speciment * head;								
+unsigned total = 0; 				/* total number of people we ve encountered in our journey back in time */
+
+extern person * samp;				/* besides using the sampled people to find common ancestors, we need to keep them in a list for future use */
+//person * samp_tail;
+speciment * head;
 speciment * tail;
-unifree * uhead;
+rec_free * rec_head = NULL;
+
+unsigned max_segment = 1000;
 
 unsigned * affect;
-unsigned * affect2;
 
-int m1 = -1;
 unsigned currK = 10;
+unsigned nk =0;
 
-/* void countSpeciments(speciment *s){ */
-/*   if( s -> present_children == NULL ){ */
-/*     ++m1;  */
-/*     return; */
-/*   } */
+/* ----- specified sampling start ------- */
+char boxs = 0; 		/* default is to pick a uniformed sample */
+char ancs = 0;		/* default is to pick samples from the present only */
+boxed * boxhd = NULL;
+void area_sampling(unsigned sam, unsigned srow, unsigned erow, unsigned scol, unsigned ecol, unsigned gen);
+void sampling(unsigned samples);
+/* ------ specified sampling end -------- */
 
+unsigned created_people = 0;
 
-
- 
-/* int ancestry2array(speciment *s){ */
-/*   ++m1; */
-/*   unsigned id = 0; */
-/*   id = s->prs->pid; */
-/*   anc[m1].id = id; */
-/*   fprintf(stderr, "id:%d\n", id); */
-/*   if ( s->present_children == NULL){ */
-/*     anc[m1].presentChildren = 1; */
-/*     fprintf(stderr, "terminal id: %d\n", id); */
-/*     return; */
-/*   } */
-  
-/*   speciment *tmp = s -> present_children; */
-/*   unsigned i = 0; */
-/*   while(tmp != NULL){ */
-/*     ++i; */
-/*     tmp = tmp->next; */
-/*   } */
-
-/*   anc[m1].presentChildren = i; */
-  
-/*   tmp = s -> children; */
-/*   fprintf(stderr, "childs id: %d, childsPres: %d\n", tmp->prs->pid, i); */
-/*   while (tmp != NULL){ */
-/*     ancestry2array(tmp); */
-
-
-/*     tmp = tmp -> next; */
-/*   } */
-/*   return m1; */
-/* } */
-
-void sub_present(speciment * s){
-  ++m1;
-  if (s -> present_children == NULL){
-    affect2[1]++;
-    return;
-  }
-  unsigned i = 0;
-  speciment * tmp = s -> present_children;
-  while (tmp != NULL){
-    i++;
-    if (m1 == 0 || m1 == 20 || m1 == 300)
-      printf("%d  ",tmp -> prs -> pid);
-    tmp = tmp -> next;
-  }
-  
-  if (m1 == 0 || m1 == 20 || m1 == 300)
-    printf("%d\n", i);
-  
-  affect2[i]++;
-  
-  tmp = s -> children;
-  while (tmp != NULL){
-    sub_present(tmp);
-    tmp = tmp -> next;
-  }
+void add_recfree(preschild * p){
+  rec_free * tmp = malloc(sizeof(rec_free));
+  tmp -> pres = p;
+  tmp -> next = rec_head;
+  rec_head = tmp;
 }
 
+
 unsigned min(unsigned x, unsigned y){
-  if ( x < y )
-    return x;
-  return y;
+	if ( x < y )
+		return x;
+	return y;
 }
 
 unsigned max(unsigned x, unsigned y){
-  if ( x > y )
-    return x;
-  return y;
+	if ( x > y )
+		return x;
+	return y;
 }
 
 segment * merge_segments(segment * first, segment * second){
-  segment * t = NULL;
-  segment * seg1 = first;
-  segment * seg2 = second;
-  segment * freeseg = NULL;
-  while(seg1 != NULL && seg2 != NULL){
-    if (seg1 -> start == seg2 -> start ){
-      if (t == NULL)
-	t = seg1;
-      else{
-	t -> next = seg1;
-	t = t -> next;
-      }
-      t -> end = max(seg1 -> end, seg2 -> end);
-      seg1 = seg1 -> next;
-      seg2 = seg2 -> next;
-    }
-    else if (seg1 -> end == seg2 -> end){
-      if (t == NULL)
-	t = seg1;
-      else{
-	t -> next = seg1;
-	t = t -> next;
-      }
-      t -> start = min(seg1 -> start, seg2 -> start);
-      seg1 = seg1 -> next;
-      seg2 = seg2 -> next;
-    }
-    else if(seg1 -> start < seg2 -> start){
-      if (t == NULL)
-	t = seg1;
-      else{
-	t -> next = seg1;
-	t = t -> next;
-      }
-      if (!(t -> end < seg2 -> start - 1)){
-	t -> end = max(t -> end, seg2 -> end);
-	seg2 = seg2 -> next;
-      }
-      seg1 = seg1 -> next;
-    }
-    else{
-      if (t == NULL)
-	t = seg2;
-      else{
-	t -> next = seg2;
-	t = t -> next;
-      }
-      if (!(t -> end < seg1 -> start - 1)){
-	t -> end = max(t -> end, seg1 -> end);
-	seg1 = seg1 -> next;
-      }
-      seg2 = seg2 -> next;
-    }
-  }
-  if (seg1) /* which means seg2 has ended */
-    t -> next = seg1;
-  else /* which means that either both have ended or just seg1 */
-    t -> next = seg2;
-  return t;
+	segment * t = NULL;
+	segment * seg1 = first;
+	segment * seg2 = second;
+	segment * freeseg = NULL;
+	while(seg1 != NULL && seg2 != NULL){
+
+		if (seg1 -> start == seg2 -> start ){	/* start from the same point ~ overlapping */
+			if (t == NULL)
+				t = seg1;
+			else{
+				t -> next = seg1;
+				t = t -> next;
+			}
+			t -> end = max(seg1 -> end, seg2 -> end);
+			seg1 = seg1 -> next;
+			seg2 = seg2 -> next;
+		}
+
+		else if (seg1 -> end == seg2 -> end){	/* end at the same point ~ overlapping */
+			if (t == NULL)
+				t = seg1;
+			else{
+				t -> next = seg1;
+				t = t -> next;
+			}
+			t -> start = min(seg1 -> start, seg2 -> start);
+			seg1 = seg1 -> next;
+			seg2 = seg2 -> next;
+		}
+
+		else if(seg1 -> start < seg2 -> start){	/* seg1 starts before seg2 */
+			if (t == NULL)
+				t = seg1;
+			else{
+				t -> next = seg1;
+				t = t -> next;
+			}
+			if (!(t -> end < seg2 -> start - 1)){ /* overlapping */
+				t -> end = max(t -> end, seg2 -> end);
+				seg2 = seg2 -> next;
+			}
+			seg1 = seg1 -> next;
+		}
+
+		else{	/* seg2 starts before seg1 */
+			if (t == NULL)
+				t = seg2;
+			else{
+				t -> next = seg2;
+				t = t -> next;
+			}
+			if (!(t -> end < seg1 -> start - 1)){ /* overlapping */
+				t -> end = max(t -> end, seg1 -> end);
+				seg1 = seg1 -> next;
+			}
+			seg2 = seg2 -> next;
+		}
+	}
+	if (seg1) /* which means seg2 has ended */
+		t -> next = seg1;
+	else /* which means that either both have ended or just seg1 */
+		t -> next = seg2;
+	return t;
 }
 
 speciment * merge(speciment * s1, speciment * s2){
-  s1 -> segments = merge_segments(s1 -> segments, s2 -> segments);
-  speciment * p1 = s1 -> present_children;
-  speciment * p2 = s2 -> present_children;
-  speciment * tmp = NULL;;
-  while ( p1 && p2){
-    if (p1 -> prs -> pid == p2 -> prs -> pid){ /* duplicate prevention */
-      p1 -> segments = merge_segments(p1 -> segments, p2 -> segments); 
-      p1 = p1 -> next;
-      p2 = p2 -> next;
-    }
-    else if (p1 -> prs -> pid > p2 -> prs -> pid){ /* need to merge */
-      tmp = p2 -> next;
-      if ( !p1 -> prev ){ /* p2 < every p1 */
-	p2 -> prev = NULL;
-	p2 -> next = p1;
-	p1 -> prev = p2;
-	s1 -> present_children = p2;
-      }
-      else {
-	p2 -> prev = p1 -> prev;
-	p1 -> prev -> next = p2;
-	p1 -> prev = p2;
-	p2 -> next = p1;
-      }
-      p2 = tmp;
-    }
-    else{
-      if (!p1 -> next){
-		p1 -> next = p2;
-		p1 -> next -> prev = p1;
-		break;
-      }
-      p1 = p1 -> next;
-    }
-  }
-  speciment * cld = s1 -> children;
-  while(cld -> next)
-    cld = cld -> next;
-  cld -> next = s2 -> children;
-  free(s2 -> prs);
-  free(s2);
-  return s1;
+	preschild * p1 = s1 -> present_children;
+	preschild * p2 = s2 -> present_children;
+	preschild * tmp = NULL;;
+	while ( p1 && p2){
+		if (p1 -> pid == p2  -> pid){ /* duplicate prevention */
+			p1 -> segments = merge_segments(p1 -> segments, p2 -> segments);
+			//print_segments(p1 -> segments);
+			p1 = p1 -> next;
+			p2 = p2 -> next;
+		}
+		else if (p1  -> pid > p2 -> pid){ /* need to merge */
+			tmp = p2 -> next;
+			if ( !p1 -> prev ){ /* p2 < every p1 */
+				p2 -> prev = NULL;
+				p2 -> next = p1;
+				p1 -> prev = p2;
+				s1 -> present_children = p2;
+			}
+			else {
+				p2 -> prev = p1 -> prev;
+				p1 -> prev -> next = p2;
+				p1 -> prev = p2;
+				p2 -> next = p1;
+			}
+			p2 = tmp;
+		}
+		else{
+		if (!p1 -> next){
+			p1 -> next = p2;
+			p1 -> next -> prev = p1;
+			break;
+		}
+		p1 = p1 -> next;
+		}
+	}
+	free(s2 -> prs);
+	free(s2);
+	return s1;
 }
 
 /* --------------------------------------- insert - delete queue start ---------------------------------------- */
 
 void insert_queue(speciment * s){
-  s -> prev = NULL;
-  if (!head){
-    head = s;
-    tail = head;
-    prev_gen++;
-    return;
-  }
-  unsigned pg = 0; /* previous generation counter ~ so that we know how far we search for duplicates */
-  speciment * tmp = head; 
-  if (!smpl) {
-    while (tmp && pg < prev_gen){
-      if ( tmp -> prs -> pid == s -> prs -> pid){ /* if we alredy got this person from another child */
-	tmp = merge(tmp, s);
-	return;
-      }
-      pg++;
-      tmp = tmp -> next;
-    }
-  }
-  head -> prev = s;
-  s -> next = head;
-  head = s;
-  prev_gen++;
-}
-
-void unique_storage(speciment * s){
-  unifree * u = malloc(sizeof(unifree));
-  u -> spec = s;
-  u -> next = uhead;
-  uhead = u;
-}
-
-void sample_storage(person * p){ /* stores the samples into a list in ascending order */
-  if (!samp){ /* first entry */
-    samp = p;
-    samp -> next = NULL;
-    return;
-  }
-  if (!( samp -> pid < p -> pid)) { /* add to head of the list */
-    if (samp -> pid == p -> pid )
-      samples--;
-    else{
-      p -> next = samp;
-      samp = p;
-    }
-    return;
-  }
-  person * tmp = samp;
-  person * prv = samp;
-  while (tmp != NULL && tmp -> pid < p -> pid ){
-    prv = tmp;
-    tmp = tmp -> next;
-  }
-  if ( tmp != NULL &&  tmp -> pid == p -> pid ){ /* duplicate prevention */
-    printf("duplicate %d\n", p -> pid);
-    assert(0);
-    samples--;
-    return;
-  }
-  prv -> next = p;
-  p -> next = tmp;
-}
-
-/* ---------------------------------------- insert - delete queue end ----------------------------------------- */
-
-void sampling(unsigned samples){ /* self-explanatory */ 
-  unsigned random, counter, x, i, j, k;
-  unsigned  sampflag = 0;
-  speciment * s;
-  person * tmp;
-	
-  int *samplesID = malloc(samples * sizeof(int));
-	
-  for(x = 0; x < samples; ++x){
-    sampflag = 0;
-    random = rand() % People[event_number];
-		
-    for(j = 0; j < x; ++j){
-      if (samplesID[j] == random){
-	sampflag =1;
-	break;
-      }
-    }
-    if (sampflag){
-      x--;
-      sampflag = 0;
-      continue;
-    }
-    samplesID[x] = random;
-  }
-	
-  for (x = 0; x < samples; x++){
-    random = samplesID[x];	/* each time we choose a random person from the total population until we reach the desired amount */
-    counter = 0;
-    for ( i = 0; i < rows; i++){
-      for ( j = 0; j < columns; j++){
-	if (current -> population > 0 ){
-	  if (random - counter < current -> population){
-	    tmp = current -> people;
-	    for ( k = counter; k < random; k++ )
-	      tmp = tmp -> next;
-	    assert(tmp);
-	    s = malloc(sizeof(speciment));
-	    s -> prs = malloc(sizeof(person));
-	    s -> prs -> pid = tmp -> pid;
-	    s -> prs -> flag = 'u';
-	    s -> prs -> fitness = tmp -> fitness;
-	    s -> prs -> parent1 = tmp -> parent1;
-	    s -> prs -> parent2 = tmp -> parent2;
-	    s -> prs -> next = NULL;
-	    sample_storage(s -> prs);	/* keeping a trace of the samples */
-	    s -> segments = malloc(sizeof(segment));
-	    s -> segments -> start = 0;
-	    s -> segments -> end = MAX_SEGMENT;
-	    s -> segments -> next = NULL;
-	    s -> children = NULL;
-	    s -> present_children = NULL;
-	    s -> next = NULL;
-	    s -> prev = NULL;
-	    /* we add it to the queue */
-	    insert_queue(s);
-	    j = columns;
-	    i = rows;
-	  }
-	  else
-	    counter += current -> population;
+	assert(s != NULL); /* just a safety clause should never be triggered */
+	s -> prev = NULL;
+	if (!head){
+		head = s;
+		tail = head;
+		++prev_gen;
+		return;
 	}
-      }
-    }
-  }
-  free(samplesID);
-  smpl = 0;	/* done with sampling */
+	unsigned pg = 0; /* previous generation counter ~ so that we know how far we search for duplicates */
+	speciment * tmp = head;
+	if (!smpl) {
+		while (tmp && pg < prev_gen){
+			if ( tmp -> prs -> pid == s -> prs -> pid){ /* if we alredy got this person from another child */
+				tmp = merge(tmp, s);
+				return;
+			}
+			++pg;
+			tmp = tmp -> next;
+		}
+	}
+	head -> prev = s;
+	s -> next = head;
+	head = s;
+	++prev_gen;
 }
 
 /* ------------------------------------------- back in time start ------------------------------------------- */
 
 void recombine(speciment * s){
-  unsigned cutting_point = rand() % MAX_SEGMENT;	/* we choose a cutting point */
-  /* initialing the speciments describing the 2 parents */
-  speciment * s1 = malloc(sizeof(speciment));
-  speciment * s2 = malloc(sizeof(speciment));
-  s1 -> prs = malloc(sizeof(person));
-  s2 -> prs = malloc(sizeof(person));
-  if (rand() % 99 < 50){
-    s1 -> prs -> pid = s -> prs -> parent1 -> pid;
-    s1 -> prs -> flag = 'u';
-    s1-> prs -> parent1 = s -> prs -> parent1-> parent1;
-    s1 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
-    s2 -> prs -> pid = s -> prs -> parent2 -> pid;
-    s2 -> prs -> parent1 = s -> prs -> parent2-> parent1;
-    s2 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
-  }
-  else {
-    s1 -> prs -> pid = s -> prs -> parent2 -> pid;
-    s1 -> prs -> flag = 'u';
-    s1-> prs -> parent1 = s -> prs -> parent2-> parent1;
-    s1 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
-    s2 -> prs -> pid = s -> prs -> parent1 -> pid;
-    s2-> prs -> parent1 = s -> prs -> parent1-> parent1;
-    s2 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
-  }
-  s2 -> prs -> flag = 'r'; /* flagging it for use in free */
-  s1 -> prs -> next = NULL;
-  s2 -> prs -> next = NULL;
-  s1 -> children = s;
-  s2 -> children = s;
-	
-  s1 -> present_children = NULL;
-  s2 -> present_children = NULL;
-  char multiflag = 0;
-  if (event_number == event_backwards){ /* on our first step back */
-    s1 -> present_children = malloc(sizeof(speciment)); 
-    s1 -> present_children -> prs = malloc(sizeof(person));
-    s1 -> present_children -> prs -> pid = s -> prs -> pid;
-    s1 -> present_children -> prs -> flag = 'u';
-    s1 -> present_children -> prs -> fitness = 0;
-    s1 -> present_children -> prs -> parent1 = NULL;
-    s1 -> present_children -> prs -> parent2 = NULL;
-    s2 -> present_children = malloc(sizeof(speciment));
-    s2 -> present_children -> prs = malloc(sizeof(person));
-    s2 -> present_children -> prs -> pid = s -> prs -> pid;
-    s2 -> present_children -> prs -> flag = 'u';
-    s2 -> present_children -> prs -> fitness = 0;
-    s2 -> present_children -> prs -> parent1 = NULL;
-    s2 -> present_children -> prs -> parent2 = NULL;
-  }
-  else{
-    if ( s -> present_children -> next != NULL) /* multiple present children */
-      multiflag = 1;
-    else{
-      s1 -> present_children = malloc(sizeof(speciment));
-      s1 -> present_children -> prs = malloc(sizeof(person));
-      s1 -> present_children -> prs -> pid = s -> present_children -> prs -> pid;
-      s1 -> present_children -> prs -> flag = 'u';
-      s1 -> present_children -> prs -> fitness = 0;
-      s1 -> present_children -> prs -> parent1 = NULL;
-      s1 -> present_children -> prs -> parent2 = NULL;
-      s2 -> present_children = malloc(sizeof(speciment));
-      s2 -> present_children -> prs = malloc(sizeof(person));
-      s2 -> present_children -> prs -> pid = s -> present_children -> prs -> pid;
-      s2 -> present_children -> prs -> flag = 'u';
-      s2 -> present_children -> prs -> fitness = 0;
-      s2 -> present_children -> prs -> parent1 = NULL;
-      s2 -> present_children -> prs -> parent2 = NULL;
-    }
-  }
-  if (!multiflag){
-    s1 -> present_children -> children = NULL;
-    s1 -> present_children -> present_children = NULL;
-    s1 -> present_children -> segments = malloc(sizeof(segment)); 
-    s1 -> present_children -> segments -> start = 0;
-    s1 -> present_children -> segments -> end = cutting_point;
-    s1 -> present_children -> segments -> next = NULL;
-    s1 -> present_children -> next = NULL;
-    s1 -> present_children -> prev = NULL;
-    s2 -> present_children -> children = NULL;
-    s2 -> present_children -> present_children = NULL;
-    s2 -> present_children -> segments = malloc(sizeof(segment));
-    if (cutting_point != MAX_SEGMENT)
-      s2 -> present_children -> segments -> start = cutting_point + 1;
-    else
-      s2 -> present_children -> segments -> start = cutting_point;
-    s2 -> present_children -> segments -> end = MAX_SEGMENT;
-    s2 -> present_children -> segments -> next = NULL;
-    s2 -> present_children -> next = NULL;
-    s2 -> present_children -> prev = NULL;
-    unique_storage(s1 -> present_children); 
-    unique_storage(s2 -> present_children);
-  }
-  segment * seg1 = malloc(sizeof(segment)); 
-  seg1 -> start = 0;
-  seg1 -> end = 0;
-  seg1 -> next = NULL;
-  segment * seg2 = malloc(sizeof(segment));
-  seg2 -> start = 0;
-  seg2 -> end = 0;
-  seg2 -> next = NULL;
-	
-  if (s -> segments -> next){ /* if there are more than one segments */
-    segment * tmp = malloc(sizeof(segment));
-    tmp = s -> segments;
-    segment * tmp1 = calloc(1, sizeof(segment));
-    seg1 = tmp1;
-    while (tmp &&  cutting_point > tmp -> start){	/* till we reach the cutting point  */
-      if (!tmp1) /* for the first time we enter the loop */
-	tmp1 = tmp;
-      else {
-	tmp1 -> next = tmp;
-	tmp1 = tmp1 -> next;
-      }
-      tmp = tmp -> next;
-    }
-    if (tmp !=NULL && !tmp1){ /* if the cutting point was in the first segment */
-      seg1 -> start = tmp -> start;
-      seg1 -> end = cutting_point;
-      seg2 -> start = cutting_point +1;
-      seg2 -> end = tmp -> end;
-      seg2 -> next = tmp -> next;
-    }
-    else if (tmp != NULL && cutting_point < tmp -> end){
-      tmp1 -> next = malloc(sizeof(segment));
-      tmp1 -> next -> start = tmp -> start;
-      tmp1-> next -> end = cutting_point;
-      tmp1 -> next -> next = NULL;
-      seg2 -> start = cutting_point + 1;																																
-      seg2 -> end = s -> segments -> end;
-      seg2 -> next = tmp -> next;
-    }
-    else{ /* meaning that the cutting point was before the first or after the last segment */
-      s1 -> segments = s -> segments;
-      s1 -> present_children = s -> present_children;
-      s1 -> present_children -> segments = seg1;
-      insert_queue(s1);
-      free(s2 -> prs);
-      s2 -> present_children = NULL;
-      if (!multiflag)
-	free(s2 -> present_children);
-      free(seg2);
-      return;
-    }
-  }
-  else if ( cutting_point < s -> segments -> start && cutting_point > s -> segments -> end) { /* if the random cutting point doesn't match the person's segment we simply do not need to recombine, we keep whichever parent we chose as s1 */
-    s1 -> segments = s -> segments;
-    s1 -> present_children = s -> present_children;
-    s1 -> present_children -> segments = seg1;
+	/* initialing the speciments describing the 2 parents */
+	speciment * s1 = malloc(sizeof(speciment));
+	speciment * s2 = malloc(sizeof(speciment));
+	s1 -> prs = malloc(sizeof(person));
+	s2 -> prs = malloc(sizeof(person));
+	double random  = rand() / (double)RAND_MAX;
+
+	if (random < 0.500){
+    memcpy(s1 -> prs, s -> prs -> parent1, sizeof(person));
+    memcpy(s2 -> prs, s -> prs -> parent2, sizeof(person));
+		// s1 -> prs -> pid = s -> prs -> parent1 -> pid;
+		// s1 -> prs -> parent1 = s -> prs -> parent1-> parent1;
+		// s1 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
+    // s1 -> prs -> row = s -> prs -> parent1 -> row;
+		// s2 -> prs -> pid = s -> prs -> parent2 -> pid;
+		// s2 -> prs -> parent1 = s -> prs -> parent2-> parent1;
+		// s2 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
+	}
+	else {
+    memcpy(s1 -> prs, s -> prs -> parent2, sizeof(person));
+    memcpy(s2 -> prs, s -> prs -> parent1, sizeof(person));
+		// s1 -> prs -> pid = s -> prs -> parent2 -> pid;
+		// s1 -> prs -> parent1 = s -> prs -> parent2-> parent1;
+		// s1 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
+		// s2 -> prs -> pid = s -> prs -> parent1 -> pid;
+		// s2 -> prs -> parent1 = s -> prs -> parent1-> parent1;
+		// s2 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
+	}
+
+	s1 -> prs -> flag = 'r'; /* flagging it for use in free */
+	s2 -> prs -> flag = 'r'; /* flagging it for use in free */
+	s1 -> present_children = NULL;
+	s2 -> present_children = NULL;
+	s1 -> next = NULL;
+	s1 -> prev = NULL;
+	s2 -> next = NULL;
+	s2 -> prev = NULL;
+
+	/* add the parent position to the coords */
+
+	/* --------------------------------- we now need to "cut" the genome -----------------------------------*/
+	int cutting_point = (int)(rand() % (max_segment + 1)) - 1;	/* we choose a cutting point */
+	if ( cutting_point < 0){ /* give it all to the second parent */
+		s2 -> present_children = s -> present_children;
+		free(s1 -> prs);
+		free(s1);
+		insert_queue(s2);
+		return;
+	}
+	if (cutting_point == max_segment){ /* give it all to the first parent */
+		s1 -> present_children = s -> present_children;
+		free(s2 -> prs);
+		free(s2);
+		insert_queue(s1);
+		return;
+	}
+
+	if (event_number == event_backwards){ /* on our first step back ~ meaning we only have one present child w/ one segment*/
+		s1 -> present_children = malloc(sizeof(preschild));
+		s1 -> present_children -> pid = s -> prs -> pid;
+		s1 -> present_children -> next = NULL;
+		s1 -> present_children -> prev = NULL;
+		s1 -> present_children -> segments = malloc(sizeof(segment));
+		s1 -> present_children -> segments -> start = 0;
+		s1 -> present_children -> segments -> end = cutting_point;
+		s1 -> present_children -> segments -> next = NULL;
+		s1 -> present_children -> segments -> coords = malloc(sizeof(coord));
+		s1 -> present_children -> segments -> coords -> r = s -> prs -> row;
+		s1 -> present_children -> segments -> coords -> c = s -> prs -> col;
+	 	s1 -> present_children -> segments -> coords -> next = NULL;
+
+		s2 -> present_children = malloc(sizeof(preschild));
+		s2 -> present_children -> pid = s -> prs -> pid;
+		s2 -> present_children -> next = NULL;
+		s2 -> present_children -> prev = NULL;
+		s2 -> present_children -> segments = malloc(sizeof(segment));
+		s2 -> present_children -> segments -> start = cutting_point +1;
+		s2 -> present_children -> segments -> end = max_segment;
+		s2 -> present_children -> segments -> next = NULL;
+  	s2 -> present_children -> segments -> coords = malloc(sizeof(coord));
+    s2 -> present_children -> segments -> coords -> r = s -> prs -> row;
+    s2 -> present_children -> segments -> coords -> c = s -> prs -> col;
+    s2 -> present_children -> segments -> coords -> next = NULL;
+
     insert_queue(s1);
-    free(s2 -> prs);
-    s2 -> present_children = NULL;
-    if (!multiflag)
-      free(s2 -> present_children);
-    free(s2);	/* no need for this anymore */
-    return;
-  }
-  else{
-    seg1 -> start = s -> segments -> start;
-    seg1 -> end = cutting_point;
-    seg2 -> start = cutting_point + 1;
-    seg2 -> end = s -> segments -> end;
-  }
-  s1 -> segments = seg1;
-  s2 -> segments = seg2;
-  if (multiflag){ /* if there are multiple present_children */
-    speciment * multmp = s -> present_children;
-    speciment * mulspec1 = NULL;
-    speciment * mulspec2 = NULL;
-    while (multmp != NULL){
-      if (mulspec1 != NULL){
-	mulspec1 -> next = malloc(sizeof(speciment));
-	mulspec1 -> next -> prs = malloc(sizeof(person));
-	mulspec1 -> next -> prs -> pid = multmp -> prs -> pid;
-	mulspec1 -> next -> prs -> flag = 'r';
-	mulspec1 -> next -> prs -> fitness = 0;
-	mulspec1 -> next -> prs -> parent1 = NULL;
-	mulspec1 -> next -> prs -> parent2 = NULL;
-	mulspec1 -> next  -> children = NULL;
-	mulspec1 -> next  -> present_children = NULL;
-	mulspec1 -> next  -> segments = seg1;
-	mulspec1 -> next  -> next = NULL;
-	mulspec1 -> next  -> prev = NULL;
-	mulspec2 -> next  = malloc(sizeof(speciment));
-	mulspec2 -> next -> prs = malloc(sizeof(person));
-	mulspec2 -> next -> prs -> pid = multmp -> prs -> pid;
-	mulspec2 -> next -> prs -> flag = 'r';
-	mulspec2 -> next -> prs -> fitness = 0;
-	mulspec2 -> next -> prs -> parent1 = NULL;
-	mulspec2 -> next -> prs -> parent2 = NULL;
-	mulspec1 -> next  -> children = NULL;
-	mulspec2 -> next  -> children = NULL;
-	mulspec2 -> next  -> present_children = NULL;
-	mulspec2 -> next  -> segments = seg2;
-	mulspec2 -> next  -> next = NULL;
-	mulspec2 -> next  -> prev = NULL;
-	unique_storage(mulspec1 -> next);
-	unique_storage(mulspec2 -> next);
-      }
-      else{
-	mulspec1 = malloc(sizeof(speciment));
-	mulspec1 -> prs = malloc(sizeof(person));
-	mulspec1 -> prs -> pid = multmp -> prs -> pid;
-	mulspec1 -> prs -> flag = 'r';
-	mulspec1 -> prs -> fitness = 0;
-	mulspec1 -> prs -> parent1 = NULL;
-	mulspec1 -> prs -> parent2 = NULL;
-	mulspec1 -> children = NULL;
-	mulspec1 -> present_children = NULL;
-	mulspec1 -> segments = seg1;
-	mulspec1 -> next = NULL;
-	mulspec1 -> prev = NULL;
-	mulspec2 = malloc(sizeof(speciment));
-	mulspec2 -> prs = malloc(sizeof(person));
-	mulspec2 -> prs -> pid = multmp -> prs -> pid;
-	mulspec2 -> prs -> flag = 'r';
-	mulspec2 -> prs -> fitness = 0;
-	mulspec2 -> prs -> parent1 = NULL;
-	mulspec2 -> prs -> parent2 = NULL;
-	mulspec2 -> children = NULL;
-	mulspec2 -> present_children = NULL;
-	mulspec2 -> segments = seg2;
-	mulspec2 -> next = NULL;
-	mulspec2 -> prev = NULL;
-	s1 -> present_children = mulspec1;
-	s2 -> present_children = mulspec2;
-	unique_storage(mulspec1);
-	unique_storage(mulspec2);
-      }
-      mulspec1 = mulspec1 -> next;
-      mulspec2 = mulspec2 ->next;
-      multmp = multmp -> next;
-    }
-  }
-  insert_queue(s1);
-  insert_queue(s2);
+		insert_queue(s2);
+		return;
+	}
+
+	/* ---------------------------------- we now proceed to more "complex" cases ---------------------------------- */
+	preschild * prc = s -> present_children;
+	preschild * ch1 = NULL;
+	s1 -> present_children = ch1;
+	preschild * ch2 = NULL;
+	s2 -> present_children = ch2;
+	while (prc != NULL){
+		if (ch1 == NULL){
+			ch1 = malloc(sizeof(preschild));//leak
+			ch1 -> pid = prc -> pid;
+			ch1 -> segments = NULL;
+			ch1 -> next = NULL;
+			ch1 -> prev = NULL;
+			s1 -> present_children = ch1;
+		}
+		else{
+		  ch1 -> next = malloc(sizeof(preschild));//leak
+			ch1 -> next -> pid = prc -> pid;
+			ch1 -> next -> segments = NULL;
+			ch1 -> next -> next = NULL;
+			ch1 -> next -> prev = ch1;
+			ch1 = ch1 -> next;
+		}
+		if (ch2 == NULL){
+		  ch2 = malloc(sizeof(preschild));//leak
+			ch2 -> pid = prc -> pid;
+			ch2 -> segments = NULL;
+			ch2 -> next = NULL;
+			ch2 -> prev = NULL;
+			s2 -> present_children = ch2;
+		}
+		else{
+			ch2 -> next = malloc(sizeof(preschild));//leak
+			ch2 -> next -> pid = prc -> pid;
+			ch2 -> next -> segments = NULL;
+			ch2 -> next -> next = NULL;
+			ch2 -> next -> prev = ch2;
+			ch2 = ch2 -> next;
+		}
+
+		/* -------------------------------------- we now handle the segments -------------------------------------- */
+		segment * tmp = prc -> segments;
+		assert(tmp != NULL);
+		segment * seg1 = NULL;
+		segment * seg2 = NULL;
+
+		ch1 -> segments = seg1;
+		ch2 -> segments = seg2;
+
+		while (tmp != NULL && tmp -> start < cutting_point){ /* while this present_child still has segments && we haven't passed the cutting point */
+			if ( tmp -> end < cutting_point){ /* segment before the split */
+				if (seg1 != NULL){
+					seg1 -> next = malloc(sizeof(segment));
+					seg1 -> next -> start = tmp -> start;
+					seg1 -> next -> end = tmp -> end;
+					seg1 -> next -> coords = malloc(sizeof(coord));
+					seg1 -> next -> coords -> r = tmp -> coords -> r;
+					seg1 -> next -> coords -> c = tmp -> coords -> c;
+					seg1 -> next -> next = NULL;
+					seg1 = seg1 -> next;
+				}
+				else{
+					seg1 = malloc(sizeof(segment));
+					seg1 -> start = tmp -> start;
+					seg1 -> end = tmp -> end;
+					seg1 -> next = NULL;
+					ch1 -> segments = seg1;
+				}
+			}
+			else{  /* cutting point somewhere in the segment */
+				if (seg1 != NULL){ /* first(pre-cutting point) part goes to parent 1 */
+					seg1 -> next = malloc(sizeof(segment));
+					seg1 -> next -> start = tmp -> start;
+					seg1 -> next -> end = cutting_point;
+					seg1 -> next -> next = NULL;
+					seg1 = seg1 -> next;
+				}
+				else{
+				  seg1 = malloc(sizeof(segment)); //leak
+					seg1 -> start = tmp -> start;
+					seg1 -> end = cutting_point;
+					seg1 -> next = NULL;
+					ch1 -> segments = seg1;
+				}
+				if (cutting_point != tmp -> end){ /* if the whole segment does not go to parent 1 */
+					if (seg2 != NULL){ /* second(post-cutting point) part goes to parent 2 */
+						seg2 -> next = malloc(sizeof(segment));
+						seg2 -> next -> start = cutting_point + 1;
+						seg2 -> next -> end = tmp -> end;
+						seg2 -> next -> next = NULL;
+						seg2 = seg2 -> next;
+					}
+					else{
+						seg2 = malloc(sizeof(segment));//leak
+						seg2 -> start = cutting_point + 1;
+						seg2 -> end = tmp -> end;
+						seg2 -> next = NULL;
+						ch2 -> segments = seg2;
+					}
+				}
+			}
+			tmp = tmp -> next;
+		}
+		while (tmp != NULL){ /* passed the cutting point, but there were still segments - they all go to parent2 */
+			if (seg2 != NULL){
+				seg2 -> next = malloc(sizeof(segment));
+				seg2 -> next -> start = tmp -> start;
+				seg2 -> next -> end = tmp -> end;
+				seg2 -> next -> next = NULL;
+				seg2 = seg2 -> next;
+			}
+			else{
+			        seg2 = malloc(sizeof(segment)); //leak
+				seg2 -> start = tmp -> start;
+				seg2 -> end = tmp -> end;
+				seg2 -> next = NULL;
+				ch2 -> segments = seg2;
+			}
+			tmp = tmp -> next;
+		}
+		if (ch1 -> segments == NULL){ /* parent1 ended up not influencing this present child */
+			free_seg(ch1 -> segments);
+			free_present(ch1);
+			ch1 = NULL;
+			s1 -> present_children = NULL;
+		}
+		if (ch2 -> segments == NULL){ /* parent2 ended up not influencing this present child */
+			free_seg(ch2 -> segments);
+			free_present(ch2);
+			ch2 = NULL;
+			s2 -> present_children = NULL;
+		}
+		prc = prc -> next;
+	}
+	if (s1 -> present_children != NULL) /* if parent1 ended up infuencing no-one there is no need to add him to the tree */
+		insert_queue(s1);
+	else{
+	  free_present(s1 ->present_children); //new
+		free(s1 -> prs);
+		free(s1);
+	}
+	if (s2 -> present_children != NULL) /* if parent1 ended up infuencing no-one there is no need to add him to the tree */
+		insert_queue(s2);
+	else{
+	  free_present(s2 -> present_children); //new
+		free(s2 -> prs);
+		free(s2);
+	}
 }
 
 void choose_parent(speciment* s){
-  //if (s -> prs -> parent1 -> pid != s -> prs -> parent2 -> pid){	/* for single-parented children recombination is obviously useless */
-  /*	 unsigned recombination = rand() % 99;
-	 if ( recombination < 1) {
-	 recombine(s);
-	 return;
-	 }
-	 }*/
-  speciment * tmp = malloc(sizeof(speciment));
-  tmp -> prs = malloc(sizeof(person));
-  double random = (double)rand() / RAND_MAX;
-  if ( (s -> prs -> parent1 -> pid == s -> prs -> parent2 -> pid) || random < 0.5 ){ 	/* single parented so we don't need to choose or we randomly select the first */
-    tmp -> prs -> pid = s -> prs -> parent1 -> pid;
-    tmp -> prs -> parent1 = s -> prs -> parent1 -> parent1;
-    tmp -> prs -> parent2 = s -> prs -> parent1 -> parent2;
-  }
-  else{
-    tmp -> prs -> pid = s -> prs -> parent2 -> pid;
-    tmp -> prs -> parent1 = s -> prs -> parent2 -> parent1;
-    tmp -> prs -> parent2 = s-> prs -> parent2 -> parent2;
-  }
-  tmp -> prs -> flag = 0;
-  tmp -> prs -> fitness = s -> prs -> fitness;
-  tmp -> prs -> next = NULL;
-  tmp -> segments = s -> segments;
-  if (event_number == event_backwards){ /* on our first step back */
-    tmp -> present_children = malloc(sizeof(speciment));
-    tmp -> present_children -> prs = malloc(sizeof(person));
-    tmp -> present_children -> prs -> pid = s -> prs -> pid;
-    tmp -> present_children -> prs -> flag = 'u';
-    tmp -> present_children -> prs -> fitness  = s -> prs -> fitness;
-    tmp -> present_children -> prs -> parent1 = NULL;
-    tmp -> present_children -> prs -> parent2 = NULL;
-    tmp -> present_children -> prs -> next = NULL;
-    tmp -> present_children -> children = NULL;
-    tmp -> present_children -> present_children = NULL;
-    tmp -> present_children -> segments = malloc(sizeof(segment));
-    tmp -> present_children -> segments -> start = 0;
-    tmp -> present_children -> segments -> end = MAX_SEGMENT;
-    tmp -> present_children -> segments -> next = NULL;
-    tmp -> present_children -> next = NULL;
-    tmp -> present_children -> prev = NULL;
-    unique_storage(tmp -> present_children); 
-  }
-  else{
-    tmp -> present_children = s -> present_children;
-    speciment *tmp2 = tmp->present_children;
-    int ii= 0;
-    while(tmp2!=NULL){
-      ++ii;
-      tmp2 = tmp2->next;
+	/* first we check for recombination */
+	float recombination = ((float)rand()/(float)(RAND_MAX));
+	if (0){//recombination < rec_rate ){
+		recombine(s);
+		return;
+	}
+	speciment * tmp = malloc(sizeof(speciment));
+	tmp -> prs = malloc(sizeof(person));
+	double random = (double)rand() / RAND_MAX;
+	if ( (s -> prs -> parent1 -> pid == s -> prs -> parent2 -> pid) || random < 0.5 ) 	/* single parented so we don't need to choose or we randomly select the first */
+    memcpy(tmp -> prs, s -> prs -> parent1, sizeof(person));
+	else
+    memcpy(tmp -> prs, s -> prs -> parent2, sizeof(person));
+	tmp -> prs -> flag = 0;
+	tmp -> prs -> fitness = s -> prs -> fitness;
+	if (event_number == event_backwards){ /* on our first step back */
+		tmp -> present_children = malloc(sizeof(preschild)); //leak
+		tmp -> present_children -> pid = s -> prs -> pid;
+		tmp -> present_children -> segments = malloc(sizeof(segment)); //leak
+		tmp -> present_children -> segments -> start = 0;
+		tmp -> present_children -> segments -> end = max_segment;
+		tmp -> present_children -> segments -> next = NULL;
+		tmp -> present_children -> segments -> coords = malloc(sizeof(coord));
+		tmp -> present_children -> segments -> coords -> r = s -> prs -> row;
+		tmp -> present_children -> segments -> coords -> c = s -> prs -> col;
+    tmp -> present_children -> segments -> coords -> next = NULL;
+		tmp -> present_children -> next = NULL;
+		tmp -> present_children -> prev = NULL;
+	}
+	else{
+		tmp -> present_children = s -> present_children;
+		/* for the spatial origin scenario */
+    preschild * pr = tmp -> present_children;
+    while (pr != NULL){ /* for each present child */
+  		segment * segm = pr -> segments;
+  		while ( segm != NULL){
+  			/* we need to add the current position to the head of the  list */
+  			coord * co = malloc(sizeof(coord));
+  			co -> r = tmp -> prs -> row;
+  			co -> c = tmp -> prs -> col;
+  			co -> next = segm -> coords;
+  			segm -> coords = co;
+  			segm = segm -> next;
+  		}
+      pr = pr -> next;
     }
-   // fprintf(stderr, "ii:%d\n", ii);
-  }
-  /* we are creating a new top - down tree this time so we can go forward afterwards */
-  tmp -> children = s;
-  insert_queue(tmp);
+	}
+	insert_queue(tmp);
 }
 
 void create_parent(speciment * s){ /* we create a new parent to go further back in time. In case of recombination we create 2 of them */
-  person * parent1 = malloc(sizeof(person));														
-  parent1 -> pid = rand() % (People[0]);	/* the range of the possible parents equals the things we have in queue thus far */
-  parent1 -> flag = 1;
-  parent1 -> fitness = s -> prs -> fitness;
-  parent1 -> next = NULL;
-  parent1 -> parent1 = NULL;
-  parent1 -> parent2 = NULL;
-  /*
-    unsigned recombination = rand() % 99;
-    if ( recombination < 1 ){
-    person * parent2 = malloc(sizeof(person));
-    parent2 -> pid =  rand() % (curr_gen + prev_gen);
-    while (parent2 -> pid == parent1 -> pid) * making sure we don't end up with a single parent *
-    parent2 -> pid = rand() % (curr_gen + prev_gen);
-    parent2 -> flag = 1;
-    parent2 -> fitness = s -> prs -> fitness;
-    parent2 -> next = NULL;
-    parent2 -> parent1 = NULL;
-    parent2 -> parent2 = NULL;
-    s -> prs -> parent1 = parent1;
-    s -> prs -> parent2 = parent2;
-    recombine(s);
-    return;
+	person * parent1 = malloc(sizeof(person));
+	parent1 -> pid = rand() % (People[0]);	/* the range of the possible parents equals the initial population size */
+	parent1 -> flag = '1';
+	parent1 -> fitness = 1;
+	parent1 -> parent1 = NULL;
+	parent1 -> parent2 = NULL;
+	/* ------ */
+	parent1 -> row = s -> prs -> row; /* no migration takes place prior to gen 0 */
+	parent1 -> col = s -> prs -> col; /* no migration takes place prior to gen 0 */
+	unsigned recombination = ((float)rand()/(float)(RAND_MAX));
+	if (0){//recombination < rec_rate){
+		person * parent2 = malloc(sizeof(person));
+		parent2 -> pid = rand() % (curr_gen + prev_gen);
+		while (parent2 -> pid == parent1 -> pid) /* making sure we don't end up with a single parent */
+			parent2 -> pid = rand() % (curr_gen + prev_gen);
+		parent2 -> flag = '1';
+		parent2 -> fitness = 1;
+    parent2 -> row = s -> prs -> row; /* no migration takes place prior to gen 0 */
+    parent2 -> col = s -> prs -> col; /* no migration takes place prior to gen 0 */
+		parent2 -> parent1 = NULL;
+		parent2 -> parent2 = NULL;
+		s -> prs -> parent1 = parent1;
+		s -> prs -> parent2 = parent2;
+		recombine(s);
+		return;
+	}
+	speciment * tmp = malloc (sizeof(speciment));
+	tmp -> prs = parent1;
+	tmp -> present_children = s -> present_children;
+  /* for the spatial origin scenario */
+  preschild * pr = tmp -> present_children;
+  while (pr != NULL){ /* for each present child */
+    segment * segm = pr -> segments;
+    while ( segm != NULL){
+      /* we need to add the current position to the head of the  list */
+      coord * co = malloc(sizeof(coord));
+      co -> r = tmp -> prs -> row;
+      co -> c = tmp -> prs -> col;
+      co -> next = segm -> coords;
+      segm -> coords = co;
+      segm = segm -> next;
     }
-  */
-  speciment * tmp = malloc (sizeof(speciment));	
-  tmp -> prs = parent1;
-  tmp -> segments = s -> segments;
-  tmp -> present_children = s -> present_children;
-  tmp -> children = s;
-  insert_queue(tmp);
+    pr = pr -> next;
+  }
+	insert_queue(tmp);
+	++created_people;
 }
 
 void add_present(speciment * s){
-  static int nk = 0;	//ena logo pou nai static?
-  static int lid = 0;
-  nk++;  // giati apla den kaneis init se 1?
-  if(nk > currK - 1){
-    currK += currK;
-    anc = realloc(anc, currK * sizeof(struct ancestry));
-  }
-  
-  if (s -> present_children == NULL){ /* meaning we are in the present */
-    anc[nk-1].affChildren = calloc(1, sizeof(unsigned));
-    s->prs->pid = --lid;		// ypothetw t arnhtika value einai gia na ksexwrizei
-    anc[nk-1].affChildren[0] = s->prs->pid;	
-    anc[nk-1].presentChildren = 1;
-    anc[nk-1].id=s->prs->pid;
-    affect[1]++;
-    return;
-  }
-  
-  speciment * tmp = s -> present_children;
+  //  static int nk = 0;
+	static int lid = 0;
+	++nk;
+	if(nk > currK - 1){
+		currK += currK;
+		anc = realloc(anc, currK * sizeof(struct ancestry));
+	}
+	if (s -> present_children == NULL){ /* meaning we are in the present */
+	  anc[nk-1].affChildren = calloc(1, sizeof(affected));
+	  s -> prs -> pid = --lid;		/* we use negative indexes to seperate them from the rest */
+	  anc[nk-1].affChildren[0].num = s -> prs -> pid;
+	  anc[nk-1].presentChildren = 1;
+	  anc[nk-1].id = s -> prs -> pid;
+	  /* -------------------------------------------------------- */
+	  anc[nk-1].affChildren[0].segments = malloc(sizeof(segment));
+	  anc[nk-1].affChildren[0].segments -> start = 0;
+	  anc[nk-1].affChildren[0].segments -> end = max_segment;
+	  anc[nk-1].affChildren[0].segments -> next = NULL;
+	  anc[nk-1].affChildren[0].segments -> coords = malloc(sizeof(coord));
+	  anc[nk-1].affChildren[0].segments -> coords -> r = s -> prs -> row;
+    anc[nk-1].affChildren[0].segments -> coords -> r = s -> prs -> col;
+	  anc[nk-1].affChildren[0].segments -> coords -> next = NULL;
+	  /* -------------------------------------------------------- */
+	  ++affect[1];
+	  return;
+	}
 
-  anc[nk-1].affChildren = calloc(samples, sizeof(unsigned));
-  anc[nk-1].presentChildren = 0;
-  anc[nk-1].id = s->prs->pid;
-  unsigned i = 0;
-  while (tmp != NULL){
-    i++;
-    anc[nk-1].presentChildren++;
-    anc[nk-1].affChildren[i-1] = tmp->prs->pid;
-    tmp = tmp -> next;
-  }
-  affect[i]++;
+	preschild * tmp = s -> present_children;
+	unsigned counter = 0;
+	while (tmp != NULL){
+		tmp = tmp -> next;
+		++counter;
+	}
+
+	anc[nk-1].affChildren = calloc(counter, sizeof(affected));
+	anc[nk-1].presentChildren = 0;
+	anc[nk-1].id = s -> prs -> pid;
+	unsigned i = 0;
+	tmp = s -> present_children;
+	segment * seg = NULL;
+	while (tmp != NULL){
+	  ++i;
+	  ++anc[nk-1].presentChildren;
+	  anc[nk-1].affChildren[i-1].num = tmp -> pid; /* compare with original */
+	  seg = tmp -> segments;
+	  anc[nk-1].affChildren[i-1].segments = tmp -> segments;
+	  tmp = tmp -> next;
+	}
+	++affect[i];
 }
 
 void go_back(){
-  printf("go back\n");
+  //printf("go back\n");
   speciment * tmp;
-  while ( event_backwards > 0 && prev_gen != 1){  /* we stop going back either when we find a common ancestor for each segment or when we reach step 0 */ 
+  while ( event_backwards > 0 && prev_gen != 1){  /* we stop going back either when we find a common ancestor for each segment or when we reach step 0 */
+    if (ancs && boxhd != NULL && event_backwards != event_number && event_backwards == event_number - boxhd -> gen){ /* add samples for this generation */
+      area_sampling(boxhd -> samples, boxhd -> srow, boxhd -> erow, boxhd -> scol, boxhd -> ecol, boxhd -> gen);
+      boxed * boxf = boxhd;
+      boxhd = boxhd -> next;
+      free(boxf);
+    }
     if ( prev_gen != 0 ) /* so in every step but the first */
       curr_gen = prev_gen; /* we move a generation back in time */
     prev_gen = 0;
@@ -736,172 +616,256 @@ void go_back(){
       add_present(tmp);
       choose_parent(tmp);
       tail = tail -> prev;
+      assert(tail != NULL);
+      if (tmp != NULL){
+      	free(tmp -> prs);
+      	free(tmp);
+      }
       tail -> next = NULL;
-      curr_gen--;
+	    curr_gen--;
     }
     total += prev_gen;
     event_backwards--;
   }
-
 }
 
 void further_back(){	/* we might need to go to generations before zero to trace a common ancestor */
-  printf("go further back\n");
+  //printf("go further back\n");
   speciment * tmp;
-  while ( prev_gen != 1){	/* we stop going back only when we discover a common ancestor for each segment */ 
+  while ( prev_gen != 1){	/* we stop going back only when we discover a common ancestor for each segment */
     curr_gen = prev_gen;	/* we move a generation back in time */
     prev_gen = 0;
-    printf ("Negative Event %d has %d people \n", negative_generations, curr_gen);
+    //printf ("Negative Event %d has %d people \n", negative_generations, curr_gen);
     while (curr_gen > 0){
       tmp = tail;
       add_present(tmp);
       create_parent(tmp);
       tail = tail -> prev;
+      assert(tail != NULL);
+      if (tmp != NULL){
+	free(tmp -> prs);
+	free(tmp);
+      }
       tail -> next = NULL;
       curr_gen--;
     }
     total += prev_gen;
-    negative_generations++;
+    ++negative_generations;
   }
 }
 
 /* ---------------------------------- back in time end  ---------------------------------- */
 
 /* ------------------------------------- free start ----------------------------------------- */
-void free_present(unifree * u){
-  if (u -> next != NULL)
-    free_present(u -> next);
-  //if (u -> spec -> prs -> flag == 'u')
-  //	free_seg(u -> spec -> segments);
-  free(u -> spec -> prs);
-  free(u -> spec);
-  free(u);
+
+/* recombination causes additional allocations that we need to free to avoid memory leaks */
+void recomb_free(){
+  rec_free * tmp = NULL;
+  while (rec_head != NULL){
+    tmp = rec_head;
+    free_present(tmp -> pres);
+    rec_head = rec_head -> next;
+    free(tmp);
+  }
 }
 
+void free_coords(coord * co){
+  if (co == NULL)
+    return;
+  if (co -> next != NULL)
+    free_coords(co -> next);
+  free(co);
+}
 
 void free_seg(segment * seg){ /* self-explanatory */
   if (seg == NULL)
     return;
-  if (seg -> next != NULL)
+  if (seg -> next != NULL){
+    free_coords(seg -> coords);
     free_seg(seg -> next);
+  }
   free(seg);
 }
 
-void tree_destruction(speciment * s){ /* destroys the generation tree we created */
-  if (s == NULL)
-    return;
-  if (s -> prs -> flag != 'r'){ /* 2nd parent in recombination. Same children as parent1 so already set free  */
-    if (s -> children != NULL)
-      tree_destruction(s -> children);
+void free_present(preschild * p){
+  preschild * tmp = NULL;
+  while (p != NULL){
+    tmp = p;
+    p = p -> next;
+    tmp -> prev = NULL;
+    free_seg(tmp -> segments);
+    free(tmp);
   }
-  if (s -> next != NULL)
-    tree_destruction(s -> next);
-  if (s -> prs -> flag == 'u' || s -> prs -> flag == 'r')
-    free_seg(s -> segments);
-  s -> prev = NULL;
-  free(s -> prs);
-  free(s);
+}
+
+void tree_destruction(speciment * s){ /* destroys the generation tree we created */
+  speciment * tmp = NULL;
+  while (s != NULL){
+    tmp = s;
+    s = s -> next;
+    tmp -> prev = NULL;
+    free_present(tmp -> present_children);
+    free(tmp -> prs);
+    free(tmp);
+  }
 }
 
 /* -------------------------------------- free end ------------------------------------------ */
-
-void print_present_children(speciment * s){
-  FILE * f1;
-  f1 = fopen("present_children.txt", "a");
-  fprintf(f1,"\nchildren of %d	" , s -> prs -> pid);
-  speciment * tmp = s -> present_children;
-  if (tmp == NULL)
-    fprintf(f1,"already a present child");
-  segment * seg;
-  unsigned counter = 0;
-  while (tmp){
-    fprintf(f1, "child: %d, ", tmp -> prs -> pid);	// with segments:\t
-    /* seg = tmp -> segments;
-       while (seg){
-       fprintf(f1, "[%d %d] ", seg -> start, seg -> end);
-       seg = seg -> next;
-       } */
+void print_coords(){
+  speciment * tmp = head;
+  FILE * f1 = fopen("coordinates.txt", "w");
+  while (tmp != NULL){
+    preschild * pr = tmp -> present_children;
+    while (pr != NULL){
+      segment * seg = pr -> segments;
+      while (seg != NULL){
+        /* print rows first */
+        fprintf(f1, "\n%d %u %u ", pr-> pid, seg -> start, seg -> end);
+        coord * co = seg -> coords;
+        while (co != NULL){
+          fprintf(f1, "%u ", co -> r);
+          co = co -> next;
+        }
+        /* print columns after */
+        fprintf(f1, "\n%d %u %u ", pr-> pid, seg -> start, seg -> end);
+        co = seg -> coords;
+        while (co != NULL){
+          fprintf(f1, "%u ", co -> c);
+          co = co -> next;
+        }
+        seg = seg -> next;
+      }
+      pr = pr -> next;
+    }
     tmp = tmp -> next;
-    counter++;
   }
-  fprintf (f1, "children: %d\n", counter);
   fclose(f1);
 }
 
+void print_present_children(speciment * s){
+	FILE * f1;
+	f1 = fopen("present_children.txt", "a");
+	fprintf(f1,"---------------------------\nchildren of %d	" , s -> prs -> pid);
+	preschild * tmp = s -> present_children;
+	if (tmp == NULL)
+		fprintf(f1,"already a present child ");
+	segment * seg;
+	unsigned counter = 0;
+	while (tmp){
+		fprintf(f1, "child: %d, with segments:\t", tmp -> pid);
+		seg = tmp -> segments;
+		while (seg){
+			fprintf(f1, "[%d %d] ", seg -> start, seg -> end);
+			seg = seg -> next;
+		}
+		tmp = tmp -> next;
+		++counter;
+	}
+	fprintf (f1, "--------------------\nchildren: %d\n", counter);
+	fclose(f1);
+}
+
+void print_segment_representation(speciment *s){
+	FILE * f1;
+	f1 = fopen("segment_rep.txt", "a");
+	preschild * tmp = s -> present_children;
+	if (tmp == NULL)
+		fprintf(f1,"1.00 ");
+	segment * seg;
+	double size = 0.0;
+	while (tmp){
+		seg = tmp -> segments;
+		while (seg){
+			size = (seg -> end - seg -> start +1)/(max_segment+1);
+			fprintf(f1, "%lf ", size);
+			seg = seg -> next;
+		}
+		tmp = tmp -> next;
+	}
+	fclose(f1);
+}
+
 void print_segments(segment * tmp){
-  FILE * f1;
-  f1 = fopen("merge_seg.txt", "a");
-  segment * seg = tmp;
-  while (seg){
-    fprintf(f1, " [%d %d] ", seg -> start, seg -> end);
-    seg = seg -> next;
-  }
-  fprintf(f1,"\n");
-  tmp = tmp -> next;
-  fclose(f1);
+	FILE * f1;
+	f1 = fopen("merge_seg.txt", "a");
+	segment * seg = tmp;
+	while (seg){
+		fprintf(f1, " [%d %d] ", seg -> start, seg -> end);
+		seg = seg -> next;
+	}
+	fprintf(f1,"\n");
+	tmp = tmp -> next;
+	fclose(f1);
 }
 
 /* sort of a main for this step */
 void rewind_time(){
-  currK = 2*samples;
-  anc = calloc(currK, sizeof(struct ancestry));
-  event_backwards = event_number;
-  sampling(samples);
-  total = samples;
-  affect = malloc(sizeof(unsigned) * (samples +1));
-  unsigned i;
-  for (i = 0; i <= samples; i++)
-    affect[i] = 0;
-  go_back();
+//  fprintf(stderr,"MAX SEGMENT %d \nRECOMBINATION RATE %f \n", max_segment, rec_rate);
+	if (samples == 0)
+		samples = DEFAULT_SAMPLES;
+	currK = 2*samples;
+	anc = calloc(currK, sizeof(struct ancestry));
+	event_backwards = event_number;
+	negative_generations = 0;
+	if (ancs || boxs){
+		samples = 0;
+		print_boxes();
+		assert(boxhd != NULL);
+		boxed * tmp = NULL;
+		while (boxhd != NULL){
+			area_sampling(boxhd -> samples, boxhd -> srow, boxhd -> erow, boxhd -> scol, boxhd -> ecol, boxhd -> gen);
+			tmp = boxhd;
+			boxhd = boxhd -> next;
+			free(tmp);
+		}
+	}
+	else
+		sampling(samples);
+	total = samples;
+	affect = malloc(sizeof(unsigned) * (samples +1));
+	unsigned i;
+	for (i = 0; i <= samples; ++i)
+		affect[i] = 0;
 
-  keepsake = People[0]; 	/* keep track of the people we have in generation zero */
-  if ( prev_gen !=1 ){		/* meaning we partially "failed" during the initial traceback */
-    printf("need to go further back\n");
-	further_back();
-  }
-  printf("GEN OF MRCA: %d\n", event_backwards - negative_generations);	
-  printf("Total people encountered: %d\n", total);
-  printf("Speciment: %d is the common ancestor\n", head -> prs -> pid);
-  destruction();/* not useful anymore so no need to keep all this memory allocated */	
-  
-  add_present(head);
-  
-  FILE * fp = fopen("affects.txt", "w");
-  for (i = 1; i <= samples; i++)
-    fprintf(fp, "%d: %d\n", i , affect[i] );
-  fclose(fp);
-  
-  /* affect2 = calloc((samples + 1), sizeof(unsigned));
-  for (i = 0; i <= samples; i++)
-    affect2[i] = 0;
-  sub_present(head);
-  FILE * fp2 = fopen("affects2.txt", "w");
-  for (i = 1; i <= samples; i++)
-    fprintf(fp2, "%d: %d\n", i , affect2[i] );
-  fclose(fp2);
-  */
-  printf (" \n REWIND COMPLETE \n");
+	go_back();
+	assert(head != NULL);
+	keepsake = People[0]; 	/* keep track of the people we have in generation zero */
+	if ( prev_gen > 1 ){		/* meaning we partially "failed" to trace the MRCA during the initial traceback */
+	  	further_back();
+	}
+/*	FILE * fmr = fopen("mrca.txt","w");
+	fprintf(fmr, "%d ", (event_backwards - negative_generations));
+	fclose(fmr);
+*/
+	assert(head != NULL);
+	//printf("Speciment: %d is the common ancestor\n", head -> prs -> pid);
+	add_present(head);
+  print_coords();
+	destruction();/* not useful anymore so no need to keep all this memory allocated */
+	free(affect);
+	//free(anc);
+	//fprintf (stderr, " \n REWIND COMPLETE \n");
 }
 
 /* ------------------------------------------------------------------------------------------------- BRIEF SUMMARY OF THE CODE ------------------------------------------------------------------------------------------------- */
 
 /*
-  1) We sample N people from the last instance of the map as created in the forward step
+1) We sample N people from the last instance of the map as created in the forward step
 
-  2) We add these children in a double linked list(implementation of a FIFO queue) that besides these people contains a list of all the segments we are examining and a boolean of whether we are 
-  done with the current segment. Done with
+2) We add these children in a double linked list(implementation of a FIFO queue) that besides these people contains a list of all the segments we are examining and a boolean of whether we are
+done with the current segment. Done with
 
-  a segment simply means that all the samples have found a common ancestor from whom they inhereted the current segment. A segment is the fragment of a chain consisting of chromosomes , 
-  dna or anything else we are examining.
+a segment simply means that all the samples have found a common ancestor from whom they inhereted the current segment. A segment is the fragment of a chain consisting of chromosomes ,
+dna or anything else we are examining.
 
-  3) We now go back in time, each time examining the previous generation in the search for one or more common ancestors. There are three condition that we check and if either one is complete 
-  we terminate the loop.The first is finding a single common ancestor. The second(which sort of includes the first but we have to check both), is reaching a point in time were for each segment we 
-  have found again a common ancestor. The third equals the failure of the first two since
-  when we reach step zero, that is the starting point of the experiment we have no other choice but to stop. While none of the above stands correct, we take these steps:
-  i) we pop the last node of the queue
-  ιι) we deduce the path back for that node and follow it. We add the parent of that person to the queue. We keep an integer that show us how many people we have in the previous generation,
-  which we increase it's time we find a parent.
-  ιιι) if two people have the same parent, we merge the segments we took from each, thus keeping a single node for each unique parent.
-  iv) we repeat till all the current generations parents have been deduced.
-  v) we check for done and not - done segments. As long as we have segments that exist in multiple people we are not done.
+3) We now go back in time, each time examining the previous generation in the search for one or more common ancestors. There are three condition that we check and if either one is complete
+we terminate the loop.The first is finding a single common ancestor. The second(which sort of includes the first but we have to check both), is reaching a point in time were for each segment we
+have found again a common ancestor. The third equals the failure of the first two since
+when we reach step zero, that is the starting point of the experiment we have no other choice but to stop. While none of the above stands correct, we take these steps:
+i) we pop the last node of the queue
+ii) we deduce the path back for that node and follow it. We add the parent of that person to the queue. We keep an integer that show us how many people we have in the previous generation,
+which we increase it's time we find a parent.
+iii) if two people have the same parent, we merge the segments we took from each, thus keeping a single node for each unique parent.
+iv) we repeat till all the current generations parents have been deduced.
+v) we check for done and not - done segments. As long as we have segments that exist in multiple people we are not done.
 */

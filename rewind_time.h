@@ -1,30 +1,57 @@
+#ifndef REWIND_TIME_H
+#define REWIND_TIME_H
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <time.h>
-
 #include "spot.h"
+
+typedef struct coord{
+	int r;
+	int c;
+	struct coord * next;
+}coord;
 
 typedef struct segment{
 	unsigned start;
 	unsigned end;
+	coord * coords;
 	struct segment * next;
 }segment;
 
-typedef struct speciment{ 
-	person * prs;
-	struct speciment * children;
-	struct speciment * present_children;			/* the people of the present generation that descent from this ancestor ~ used for the mutation step */
+struct ancestry *anc;
+
+typedef struct preschild{
+	int pid;
 	segment * segments;
-	struct speciment * next;	
-	struct speciment * prev;			/* required for creating the queue */
+	struct preschild * next;
+	struct preschild * prev;
+}preschild;
+
+typedef struct speciment{
+	person * prs;
+	//struct speciment * children;
+	struct preschild * present_children;			/* the people of the present generation that descent from this ancestor ~ used for the mutation step */
+	struct speciment * next;
+	struct speciment * prev;								/* required for creating the queue */
 }speciment;
 
-typedef struct unifree{
-	speciment * spec;
+typedef struct affected{
+	unsigned num;
+	segment * segments;
+}affected;
+
+typedef struct ancestry{
+  int presentChildren;
+  unsigned id;
+  affected * affChildren;
+}ancestry;
+
+typedef struct rec_free{
+	preschild * pres;
 	struct unifree * next;
-}unifree;
+}rec_free;
 
 unsigned min(unsigned x, unsigned y);
 
@@ -36,15 +63,15 @@ speciment * merge(speciment * s1, speciment * s2);
 
 void insert_queue(speciment * s);
 
-void sample_storage(person * p);
-
-void sampling(unsigned samples);
-
 void recombine(speciment * s);
+
 
 void choose_parent(speciment* s);
 
 void create_parent(speciment * s);
+
+void add_present(speciment * s);
+
 
 void go_back();
 
@@ -52,14 +79,27 @@ void further_back();
 
 void print_children(speciment * s);
 
-void free_present();
+/* --- free --- */
+
+void free_present(preschild * p);
 
 void free_seg(segment * seg);
 
 void tree_destruction(speciment * s);
 
-void print_sampleList();
 
-void print_mutated(person * p);
+/* --- print --- */
+
+void print_present_children(speciment * s);
+
+void print_segment_representation(speciment *s);
+
+//void print_sampleList();
+
+//void print_mutated(person * p);
+
+void print_segments(segment * tmp);
 
 void rewind_time();
+
+#endif

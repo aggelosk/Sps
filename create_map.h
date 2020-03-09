@@ -4,11 +4,14 @@
 #include <assert.h>
 #include <time.h>
 
+#include <omp.h>
+
 #include "spot.h"
+
 
 void set_dimentions(unsigned r, unsigned c);
 
-void set_terrain(unsigned r, unsigned c);
+//void set_terrain(unsigned r, unsigned c);
 
 void init_population(unsigned i, unsigned j, unsigned population);
 

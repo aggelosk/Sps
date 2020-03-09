@@ -1,4 +1,4 @@
-SOURCES =  spot.c create_map.c forward_time.c rewind_time.c mutation.c
+SOURCES =  spot.c cmd_parameters.c create_map.c forward_time.c sampling.c rewind_time.c mutation.c
 OBJECTS = $(SOURCES:%.c=%.o)
 
 TARGET = sps
@@ -6,12 +6,12 @@ TARGET = sps
 all: $(TARGET)
 
 %.o: %.c
-	gcc -pedantic -w -g $< -c -o $@
-				
+	gcc -openmp -pedantic -w  -g $< -c -o $@
+
 $(TARGET): $(OBJECTS)
-	gcc $(OBJECTS) -o $@ -lm -lgsl
-				
+	gcc $(OBJECTS) -o $@ -lm -lgsl -lgslcblas
+
 clean:
 	rm -f $(TARGET)
 	rm -f $(OBJECTS)
-	rm -f *.txt
+	rm -f *.png
