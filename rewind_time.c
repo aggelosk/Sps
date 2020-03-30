@@ -21,8 +21,6 @@ unsigned prev_gen = 0;
 unsigned keepsake = 0;				/* for tracing further back in time purposes */
 char smpl = 1;					/* checks if we are still in sampling or not. Default value 1(true) since we begin this step by picking samples */
 
-double rec_rate = 0.001;			/* probability of recombination occuring at any given person */
-
 unsigned total = 0; 				/* total number of people we ve encountered in our journey back in time */
 
 extern person * samp;				/* besides using the sampled people to find common ancestors, we need to keep them in a list for future use */
@@ -38,12 +36,15 @@ unsigned * affect;
 unsigned currK = 10;
 unsigned nk =0;
 
+int ben_pos = -1; /* position for the beneficial mutation */
+
 /* ----- specified sampling start ------- */
 char boxs = 0; 		/* default is to pick a uniformed sample */
 char ancs = 0;		/* default is to pick samples from the present only */
 boxed * boxhd = NULL;
 void area_sampling(unsigned sam, unsigned srow, unsigned erow, unsigned scol, unsigned ecol, unsigned gen);
 void sampling(unsigned samples);
+extern double rec_rate;
 /* ------ specified sampling end -------- */
 
 unsigned created_people = 0;
@@ -214,26 +215,17 @@ void recombine(speciment * s){
 	s2 -> prs = malloc(sizeof(person));
 	double random  = rand() / (double)RAND_MAX;
 
-	if (random < 0.500){
+
+  int cutting_point = (int)(rand() % (max_segment + 1)) - 1;	/* we choose a cutting point */
+
+  /* we need to decide which parent takes the left part of the genome and which the other one */
+	if (cutting_point > ben_pos){ /* always true when there is no beneficial mutation but doesn't affect the outcome so no worries */
     memcpy(s1 -> prs, s -> prs -> parent1, sizeof(person));
     memcpy(s2 -> prs, s -> prs -> parent2, sizeof(person));
-		// s1 -> prs -> pid = s -> prs -> parent1 -> pid;
-		// s1 -> prs -> parent1 = s -> prs -> parent1-> parent1;
-		// s1 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
-    // s1 -> prs -> row = s -> prs -> parent1 -> row;
-		// s2 -> prs -> pid = s -> prs -> parent2 -> pid;
-		// s2 -> prs -> parent1 = s -> prs -> parent2-> parent1;
-		// s2 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
 	}
 	else {
     memcpy(s1 -> prs, s -> prs -> parent2, sizeof(person));
     memcpy(s2 -> prs, s -> prs -> parent1, sizeof(person));
-		// s1 -> prs -> pid = s -> prs -> parent2 -> pid;
-		// s1 -> prs -> parent1 = s -> prs -> parent2-> parent1;
-		// s1 -> prs -> parent2 = s -> prs -> parent2 -> parent2;
-		// s2 -> prs -> pid = s -> prs -> parent1 -> pid;
-		// s2 -> prs -> parent1 = s -> prs -> parent1-> parent1;
-		// s2 -> prs -> parent2 = s -> prs -> parent1 -> parent2;
 	}
 
 	s1 -> prs -> flag = 'r'; /* flagging it for use in free */
@@ -247,8 +239,7 @@ void recombine(speciment * s){
 
 	/* add the parent position to the coords */
 
-	/* --------------------------------- we now need to "cut" the genome -----------------------------------*/
-	int cutting_point = (int)(rand() % (max_segment + 1)) - 1;	/* we choose a cutting point */
+  /* --------------------------------- we now need to "cut" the genome -----------------------------------*/
 	if ( cutting_point < 0){ /* give it all to the second parent */
 		s2 -> present_children = s -> present_children;
 		free(s1 -> prs);
@@ -304,7 +295,7 @@ void recombine(speciment * s){
 	s2 -> present_children = ch2;
 	while (prc != NULL){
 		if (ch1 == NULL){
-			ch1 = malloc(sizeof(preschild));//leak
+			ch1 = malloc(sizeof(preschild));
 			ch1 -> pid = prc -> pid;
 			ch1 -> segments = NULL;
 			ch1 -> next = NULL;
@@ -312,7 +303,7 @@ void recombine(speciment * s){
 			s1 -> present_children = ch1;
 		}
 		else{
-		  ch1 -> next = malloc(sizeof(preschild));//leak
+		  ch1 -> next = malloc(sizeof(preschild));
 			ch1 -> next -> pid = prc -> pid;
 			ch1 -> next -> segments = NULL;
 			ch1 -> next -> next = NULL;
@@ -320,7 +311,7 @@ void recombine(speciment * s){
 			ch1 = ch1 -> next;
 		}
 		if (ch2 == NULL){
-		  ch2 = malloc(sizeof(preschild));//leak
+		  ch2 = malloc(sizeof(preschild));
 			ch2 -> pid = prc -> pid;
 			ch2 -> segments = NULL;
 			ch2 -> next = NULL;
@@ -328,7 +319,7 @@ void recombine(speciment * s){
 			s2 -> present_children = ch2;
 		}
 		else{
-			ch2 -> next = malloc(sizeof(preschild));//leak
+			ch2 -> next = malloc(sizeof(preschild));
 			ch2 -> next -> pid = prc -> pid;
 			ch2 -> next -> segments = NULL;
 			ch2 -> next -> next = NULL;
@@ -344,16 +335,24 @@ void recombine(speciment * s){
 
 		ch1 -> segments = seg1;
 		ch2 -> segments = seg2;
-
+    coord * co = NULL;
 		while (tmp != NULL && tmp -> start < cutting_point){ /* while this present_child still has segments && we haven't passed the cutting point */
+
+      /* we first add the new spatial origin to each segment before we determine its parent, since they have to be from the same area to reproduce */
+      co = malloc(sizeof(coord));
+      co -> r = s1 -> prs -> row;
+      co -> c = s1 -> prs -> col;
+      co -> next = tmp -> coords;
+      tmp -> coords = co;
+
 			if ( tmp -> end < cutting_point){ /* segment before the split */
 				if (seg1 != NULL){
 					seg1 -> next = malloc(sizeof(segment));
-					seg1 -> next -> start = tmp -> start;
-					seg1 -> next -> end = tmp -> end;
+          memcpy(seg1 -> next, tmp, sizeof(segment));
 					seg1 -> next -> coords = malloc(sizeof(coord));
 					seg1 -> next -> coords -> r = tmp -> coords -> r;
 					seg1 -> next -> coords -> c = tmp -> coords -> c;
+          seg1 -> next -> coords -> next = tmp -> coords -> next;
 					seg1 -> next -> next = NULL;
 					seg1 = seg1 -> next;
 				}
@@ -361,6 +360,10 @@ void recombine(speciment * s){
 					seg1 = malloc(sizeof(segment));
 					seg1 -> start = tmp -> start;
 					seg1 -> end = tmp -> end;
+          seg1 -> coords = malloc(sizeof(coord));
+          seg1 -> coords -> r = tmp -> coords -> r;
+          seg1 -> coords -> c = tmp -> coords -> c;
+          seg1 -> coords -> next = tmp -> coords -> next;
 					seg1 -> next = NULL;
 					ch1 -> segments = seg1;
 				}
@@ -370,13 +373,21 @@ void recombine(speciment * s){
 					seg1 -> next = malloc(sizeof(segment));
 					seg1 -> next -> start = tmp -> start;
 					seg1 -> next -> end = cutting_point;
+          seg1 -> next -> coords = malloc(sizeof(coord));
+          seg1 -> next -> coords -> r = tmp -> coords -> r;
+          seg1 -> next -> coords -> c = tmp -> coords -> c;
+          seg1 -> next -> coords -> next = tmp -> coords -> next;
 					seg1 -> next -> next = NULL;
 					seg1 = seg1 -> next;
 				}
 				else{
-				  seg1 = malloc(sizeof(segment)); //leak
+				  seg1 = malloc(sizeof(segment));
 					seg1 -> start = tmp -> start;
 					seg1 -> end = cutting_point;
+          seg1 -> coords = malloc(sizeof(coord));
+          seg1 -> coords -> r = tmp -> coords -> r;
+          seg1 -> coords -> c = tmp -> coords -> c;
+          seg1 -> coords -> next = tmp -> coords -> next;
 					seg1 -> next = NULL;
 					ch1 -> segments = seg1;
 				}
@@ -385,6 +396,10 @@ void recombine(speciment * s){
 						seg2 -> next = malloc(sizeof(segment));
 						seg2 -> next -> start = cutting_point + 1;
 						seg2 -> next -> end = tmp -> end;
+            seg2 -> next -> coords = malloc(sizeof(coord));
+            seg2 -> next -> coords -> r = tmp -> coords -> r;
+            seg2 -> next -> coords -> c = tmp -> coords -> c;
+            seg2 -> next ->coords -> next = tmp -> coords -> next;
 						seg2 -> next -> next = NULL;
 						seg2 = seg2 -> next;
 					}
@@ -392,6 +407,10 @@ void recombine(speciment * s){
 						seg2 = malloc(sizeof(segment));//leak
 						seg2 -> start = cutting_point + 1;
 						seg2 -> end = tmp -> end;
+            seg2 -> coords = malloc(sizeof(coord));
+            seg2 -> coords -> r = tmp -> coords -> r;
+            seg2 -> coords -> c = tmp -> coords -> c;
+            seg2 -> coords -> next = tmp -> coords -> next;
 						seg2 -> next = NULL;
 						ch2 -> segments = seg2;
 					}
@@ -404,13 +423,21 @@ void recombine(speciment * s){
 				seg2 -> next = malloc(sizeof(segment));
 				seg2 -> next -> start = tmp -> start;
 				seg2 -> next -> end = tmp -> end;
+        seg2 -> next -> coords = malloc(sizeof(coord));
+        seg2 -> next -> coords -> r = tmp -> coords -> r;
+        seg2 -> next -> coords -> c = tmp -> coords -> c;
+        seg2 -> next ->coords -> next = tmp -> coords -> next;
 				seg2 -> next -> next = NULL;
 				seg2 = seg2 -> next;
 			}
 			else{
-			        seg2 = malloc(sizeof(segment)); //leak
+        seg2 = malloc(sizeof(segment));
 				seg2 -> start = tmp -> start;
 				seg2 -> end = tmp -> end;
+        seg2 -> coords = malloc(sizeof(coord));
+        seg2 -> coords -> r = tmp -> coords -> r;
+        seg2 -> coords -> c = tmp -> coords -> c;
+        seg2 -> coords -> next = tmp -> coords -> next;
 				seg2 -> next = NULL;
 				ch2 -> segments = seg2;
 			}
@@ -449,23 +476,20 @@ void recombine(speciment * s){
 void choose_parent(speciment* s){
 	/* first we check for recombination */
 	float recombination = ((float)rand()/(float)(RAND_MAX));
-	if (0){//recombination < rec_rate ){
+	if (s -> prs -> parent2 != NULL){
 		recombine(s);
 		return;
 	}
 	speciment * tmp = malloc(sizeof(speciment));
 	tmp -> prs = malloc(sizeof(person));
 	double random = (double)rand() / RAND_MAX;
-	if ( (s -> prs -> parent1 -> pid == s -> prs -> parent2 -> pid) || random < 0.5 ) 	/* single parented so we don't need to choose or we randomly select the first */
-    memcpy(tmp -> prs, s -> prs -> parent1, sizeof(person));
-	else
-    memcpy(tmp -> prs, s -> prs -> parent2, sizeof(person));
+  memcpy(tmp -> prs, s -> prs -> parent1, sizeof(person));
 	tmp -> prs -> flag = 0;
 	tmp -> prs -> fitness = s -> prs -> fitness;
 	if (event_number == event_backwards){ /* on our first step back */
-		tmp -> present_children = malloc(sizeof(preschild)); //leak
+		tmp -> present_children = malloc(sizeof(preschild));
 		tmp -> present_children -> pid = s -> prs -> pid;
-		tmp -> present_children -> segments = malloc(sizeof(segment)); //leak
+		tmp -> present_children -> segments = malloc(sizeof(segment));
 		tmp -> present_children -> segments -> start = 0;
 		tmp -> present_children -> segments -> end = max_segment;
 		tmp -> present_children -> segments -> next = NULL;
@@ -508,7 +532,7 @@ void create_parent(speciment * s){ /* we create a new parent to go further back 
 	parent1 -> row = s -> prs -> row; /* no migration takes place prior to gen 0 */
 	parent1 -> col = s -> prs -> col; /* no migration takes place prior to gen 0 */
 	unsigned recombination = ((float)rand()/(float)(RAND_MAX));
-	if (0){//recombination < rec_rate){
+	if (recombination < rec_rate){
 		person * parent2 = malloc(sizeof(person));
 		parent2 -> pid = rand() % (curr_gen + prev_gen);
 		while (parent2 -> pid == parent1 -> pid) /* making sure we don't end up with a single parent */
@@ -712,10 +736,8 @@ void tree_destruction(speciment * s){ /* destroys the generation tree we created
 
 /* -------------------------------------- free end ------------------------------------------ */
 void print_coords(){
-  speciment * tmp = head;
   FILE * f1 = fopen("coordinates.txt", "w");
-  while (tmp != NULL){
-    preschild * pr = tmp -> present_children;
+    preschild * pr = head -> present_children;
     while (pr != NULL){
       segment * seg = pr -> segments;
       while (seg != NULL){
@@ -737,8 +759,6 @@ void print_coords(){
       }
       pr = pr -> next;
     }
-    tmp = tmp -> next;
-  }
   fclose(f1);
 }
 
@@ -800,7 +820,6 @@ void print_segments(segment * tmp){
 
 /* sort of a main for this step */
 void rewind_time(){
-//  fprintf(stderr,"MAX SEGMENT %d \nRECOMBINATION RATE %f \n", max_segment, rec_rate);
 	if (samples == 0)
 		samples = DEFAULT_SAMPLES;
 	currK = 2*samples;
@@ -826,25 +845,16 @@ void rewind_time(){
 	unsigned i;
 	for (i = 0; i <= samples; ++i)
 		affect[i] = 0;
-
 	go_back();
 	assert(head != NULL);
 	keepsake = People[0]; 	/* keep track of the people we have in generation zero */
-	if ( prev_gen > 1 ){		/* meaning we partially "failed" to trace the MRCA during the initial traceback */
+	if ( prev_gen > 1 )		  /* meaning we partially "failed" to trace the MRCA during the initial traceback */
 	  	further_back();
-	}
-/*	FILE * fmr = fopen("mrca.txt","w");
-	fprintf(fmr, "%d ", (event_backwards - negative_generations));
-	fclose(fmr);
-*/
 	assert(head != NULL);
-	//printf("Speciment: %d is the common ancestor\n", head -> prs -> pid);
 	add_present(head);
   print_coords();
-	destruction();/* not useful anymore so no need to keep all this memory allocated */
+	destruction();         /* not useful anymore so no need to keep all this memory allocated */
 	free(affect);
-	//free(anc);
-	//fprintf (stderr, " \n REWIND COMPLETE \n");
 }
 
 /* ------------------------------------------------------------------------------------------------- BRIEF SUMMARY OF THE CODE ------------------------------------------------------------------------------------------------- */

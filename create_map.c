@@ -98,7 +98,7 @@ void init_population(unsigned i, unsigned j, unsigned population){ /* a single p
 		A[0][i][j] -> people[counter].parent1 = NULL;
 		A[0][i][j] -> people[counter].parent2 = NULL;
 		A[0][i][j] -> people[counter].row = i;
-                A[0][i][j] -> people[counter].col = j;
+    A[0][i][j] -> people[counter].col = j;
 	}
 }
 

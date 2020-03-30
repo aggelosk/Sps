@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <time.h>
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_permutation.h>
 
 #include "rewind_time.h"
 

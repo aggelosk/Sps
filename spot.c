@@ -159,65 +159,11 @@ void area_config(unsigned i, unsigned j){
 	double mig = 0;
 	double frc = 0;
 	double grt = 0;
-	//if (i == 0 && j == 0){ /* top left corner of the map */
-		A[0][i][j] -> capacity = 50;
-		A[0][i][j] -> growth_rate = 0.3;
-		A[0][i][j] -> friction = 0.5;
-		A[0][i][j] -> migrate = 0.5;
-		return;
-	//}
-
-	if (i > 0){ /* meaning we ain't at the first row, so we can check above */
-			if (j > 0){ /* ain't in the first column either, so we can check left */
-			  cap = A[0][i - 1][j - 1] -> capacity;
-				frc = A[0][i - 1][j - 1] -> friction;
-				grt = A[0][i - 1][j - 1] -> growth_rate;
-				mig = A[0][i - 1][j - 1] -> migrate;
-				++counter;
-			}
-			cap += A[0][i -1][j] -> capacity;
-			frc += A[0][i - 1][j] -> friction;
-			grt += A[0][i - 1][j] -> growth_rate;
-			mig += A[0][i - 1][j] -> migrate;
-			++counter;
-			if (j < rows  - 1 ){ /* ain't in the last column, so we can check right */
-				cap += A[0][i - 1][j + 1] -> capacity;
-				frc += A[0][i - 1][j + 1] -> friction;
-				grt += A[0][i - 1][j + 1] -> growth_rate;
-				mig += A[0][i - 1][j + 1] -> migrate;
-				++counter;
-			}
-	}
-
-	if (j > 0){
-		cap += A[0][i ][j - 1] -> capacity;
-		frc += A[0][i][j - 1] -> friction;
-		grt += A[0][i][j - 1] -> growth_rate;
-		mig += A[0][i][j - 1] -> migrate;
-		++counter;
-	}
-	cap = cap/counter;
-	frc = frc/counter;
-	grt = grt/counter;
-	mig = mig/counter;
-
-	double tmp = -1.0; 	/* the minimum capacity is 1, to allow potential migrants to go through a cell */
-	while(tmp < 1 )
-	  tmp = gsl_ran_gaussian(r, sigma) + cap + 0.5;		/* the 0.5 added is in order for proper rounding during the unsigned typecast to happen */
-	A[0][i][j] -> capacity = (unsigned)tmp;
-	tmp = -1.0;
-	while (tmp <= 0 && tmp > 1)
-		tmp = gsl_ran_gaussian(r, sigma) + frc + 0.5;
-	A[0][i][j] -> friction = (unsigned)tmp;
-	tmp = -1.0;
-	while (tmp < 0 || tmp > 0.3 )
-		tmp = gsl_ran_gaussian(r, sigma) + grt;
-	A[0][i][j] -> growth_rate = tmp;
-	tmp = -1.0;
-	while (tmp < 0 || tmp > 1)
-		tmp = gsl_ran_gaussian(r, sigma) + mig;
-	A[0][i][j] -> migrate = tmp;
-
+	A[0][i][j] -> capacity = 50;
+	A[0][i][j] -> growth_rate = 0.3;
+	A[0][i][j] -> friction = 0.5;
+	A[0][i][j] -> migrate = 0.5;
+	return;
 }
 
 void set_spot(unsigned ev, unsigned i, unsigned j){
@@ -240,6 +186,7 @@ void set_spot(unsigned ev, unsigned i, unsigned j){
 		A[ev][i][j] -> friction = A[0][i][j] -> friction;
 	}
 	A[ev][i][j] -> total_fric = 0;
+	A[ev][i][j] -> fit_people = 0;
 	A[ev][i][j] -> pop_num = -1;
 	A[ev][i][j] -> population = 0;
 	A[ev][i][j] -> people = NULL;
@@ -249,6 +196,7 @@ void set_spot(unsigned ev, unsigned i, unsigned j){
 
 int main(int argc, char** argv){
 	seed = (unsigned) time(&t);
+
 	cmd_params(argc, argv);
 
 	clock_t start = clock();
@@ -263,24 +211,20 @@ int main(int argc, char** argv){
 
 	forward_time();
 
-
 	rewind_time();
 
 	int nmut = -1;
 	if (theta != -1)
 		nmut = (int)gsl_ran_poisson(r, theta * total);
-	//printf("%d mutations \n", nmut);
 	mutate(nmut);
-
 
 	gsl_rng_free(r);
 
 	clock_t end = clock();
-	FILE * f1 = fopen("seedtimesps.txt", "a");
+	FILE * f1 = fopen("seedtimesps.txt", "w");
 	float seconds = (float)(end - start) / CLOCKS_PER_SEC;
-	fprintf(f1,"----------------------\n seed: %d in %f seconds \n",seed, seconds);
+	fprintf(f1,"%d %f\n", seed, seconds);
 	fclose(f1);
-	//fprintf (stderr, "\n ALL DONE in %f \n", seconds);
 	return 0;
 }
 

@@ -32,7 +32,7 @@ extern unsigned rows;
 extern unsigned columns;
 extern double fitness;
 extern double ben_chance;
-extern char beneficial;
+extern unsigned ben_gen;
 
 extern unsigned cram;
 extern ram * ram_h;
@@ -44,6 +44,7 @@ extern char boxs;
 extern char ancs;
 extern double rec_rate;
 extern unsigned max_segment;
+extern int ben_pos;
 
 /* parameters for Poisson and Gaussian */
 extern double sigma;
@@ -307,9 +308,11 @@ void cmd_params(int argc, char** argv){
 		/* --------- forward_time --------- */
 
 		if ( (!strcmp(argv[i], "-bene" ) ) ){
-			beneficial = 1;
+			ben_gen = atoi(argv[++i]);
+			ben_pos = atoi(argv[++i]);
 			ben_chance = atoi(argv[++i]);
 			fitness = atof(argv[++i]);
+			continue;
 		}
 
 		if ( (!strcmp(argv[i], "-cram" ) ) ){

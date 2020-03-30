@@ -43,7 +43,7 @@ typedef struct leader{
 }leader;
 
 typedef struct person{
-  unsigned pid;
+	unsigned pid;
 	float fitness;
 	/* just for the spatial origin version */
 	unsigned row;
@@ -64,6 +64,7 @@ typedef struct init_pop{
 typedef struct spot{
 	unsigned capacity;  /* max population possible */
 	int pop_num; /* shows which population this belongs to */
+  unsigned fit_people;
 
 	float growth_rate;
 	float migrate; /* probability to leave the area ~ so 0 - 1 values */

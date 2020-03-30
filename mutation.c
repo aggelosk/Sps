@@ -19,6 +19,7 @@ extern struct ancestry *anc;
 extern unsigned nk;
 
 extern unsigned max_segment;		/* num of bases our gene has */
+extern int ben_pos;
 
 unsigned mut = 20;					/* number of mutations we plan on applying ~ Default twenty*/
 
@@ -30,6 +31,7 @@ short ** muTable;					/* a table where we store the mutations */
 unsigned * ntons;
 unsigned * mut_pos;					/* position each mutation landed */
 
+extern gsl_rng * r;
 
 void print_table_sample(){ /* rows are samples, columns are mutations */
 	//printf("PRINT MUTATIONS\n");
@@ -59,7 +61,7 @@ void print_table_sample(){ /* rows are samples, columns are mutations */
 			if (muTable[i][j] == 1)
 			  ++mut_success[j];
 		}
-	     	//++ntons[counter];
+   	//++ntons[counter];
 		fprintf(f1,"\n");
 	}
 	fprintf(f1,"\n");
@@ -144,29 +146,46 @@ void print_spatial_origin(){
 void mutate(unsigned nmut){
 	if (nmut != -1) /* user defined mutation rate */
 	  mut = nmut;
+	if (ben_pos != -1) /* if there is indeed a beneficial mutation */
+		mut = mut + 1;
 	unsigned i = 0, j=0;
 
 	/* allocate everything required */
 	ntons = calloc((1 + samples), sizeof(unsigned));
 	poly = calloc(mut, sizeof(char));
 	allocate_mutation_table(samples,  mut);
-	mut_pos = calloc(mut, sizeof(unsigned));
 
+	mut_pos = calloc(mut, sizeof(unsigned));
 	unsigned rp = 0;
 	unsigned place = 0;
 	unsigned misses = 0; /* how many mutations did not affect the present */
 	int id = 0;
 
-	/* choose the positions for the mutations and sort them to comply with the Hudson's ms format */
-	int swp = 0;
+	/* choose the positions for the mutations */
+	unsigned max_possible = (max_segment + 1);
+	gsl_permutation * perm = gsl_permutation_alloc((size_t)max_possible);
+	gsl_permutation_init(perm);
+	gsl_ran_shuffle(r, perm -> data, (size_t)max_possible, sizeof(size_t) );
+
+
 	for (i = 0; i < mut; ++i)
-	  mut_pos[i] = rand() % (max_segment + 1);
+		mut_pos[i] = perm -> data[i];
+	if (ben_pos != -1) /* not yet placed so in final position*/
+		mut_pos[mut - 1] = ben_pos;
+
+	/* sort the mutations to comply with the Hudson's ms format */
+	unsigned swp = 0;
 	for (i = 0; i < mut; ++i){
 		for (j = i + 1; j< mut; ++j){
 			if (mut_pos[j] < mut_pos[i]){
 				swp = mut_pos[i];
 				mut_pos[i] = mut_pos[j];
 				mut_pos[j] = swp;
+			}
+			else if (mut_pos[j] < mut_pos[i]){ /* same mutation twice which we do not want */
+				swp = mut_pos[i];
+				mut_pos[i] = mut_pos[--mut];
+				mut_pos[mut] = swp;
 			}
 		}
 	}

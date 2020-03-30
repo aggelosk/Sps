@@ -8,8 +8,8 @@
 #include "spot.h"
 
 typedef struct coord{
-	int r;
-	int c;
+	unsigned r;
+	unsigned c;
 	struct coord * next;
 }coord;
 
