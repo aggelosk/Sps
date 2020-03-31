@@ -1,12 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
-#include <math.h>
-
-#include <omp.h>
-
 #include "spot.h"
 
 unsigned logistic_function(unsigned i, unsigned j);

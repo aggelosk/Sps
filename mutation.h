@@ -1,8 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_permutation.h>
 

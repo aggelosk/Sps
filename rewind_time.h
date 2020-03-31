@@ -1,10 +1,3 @@
-#ifndef REWIND_TIME_H
-#define REWIND_TIME_H
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
-#include <time.h>
 #include "spot.h"
 
 typedef struct coord{
@@ -101,5 +94,3 @@ void print_segment_representation(speciment *s);
 void print_segments(segment * tmp);
 
 void rewind_time();
-
-#endif
