@@ -24,7 +24,6 @@ extern init_pop * pop_h;
 
 
 /* from forward_time.c */
-extern char single_parent;
 extern char flock;
 
 extern unsigned steps;
@@ -33,6 +32,8 @@ extern unsigned columns;
 extern double fitness;
 extern double ben_chance;
 extern unsigned ben_gen;
+extern char single_bene;
+extern int gen_after_fix;
 
 extern unsigned cram;
 extern ram * ram_h;
@@ -152,9 +153,6 @@ void add_box(boxed * b){
 }
 
 
-
-
-
 void print_help(){ /* ancestral sampling needs to be added */
 
     printf("\n\n ------------ Command Line Parameters ------------ \n\n");
@@ -206,15 +204,10 @@ void cmd_params(int argc, char** argv){
 	int i;
 	for (i = 1; i < argv[i]; i++){
 
-		if ( (!strcmp(argv[i], "-flok" ) ) ){
-			flock = 1;
-			continue;
-		}
-
-		if ( (!strcmp(argv[i], "-sngp" ) ) ){
-			single_parent = atoi(argv[++i]);
-			continue;
-		}
+		// if ( (!strcmp(argv[i], "-flok" ) ) ){
+		// 	flock = 1;
+		// 	continue;
+		// }
 
 		/* ---------- create_map ---------- */
 
@@ -307,16 +300,24 @@ void cmd_params(int argc, char** argv){
 
 		/* --------- forward_time --------- */
 
+		/* beneficial mutation and it's characteristic */
 		if ( (!strcmp(argv[i], "-bene" ) ) ){
 			ben_gen = atoi(argv[++i]);
 			ben_pos = atoi(argv[++i]);
-			ben_chance = atoi(argv[++i]);
+			ben_chance = atof(argv[++i]);
 			fitness = atof(argv[++i]);
 			continue;
 		}
 
-		if ( (!strcmp(argv[i], "-cram" ) ) ){
-			add_ram(atoi(argv[++i]));
+		/* how many generations to run post fixation of beneficial mutation */
+		if ( (!strcmp(argv[i], "-fixg" ) ) ){
+			gen_after_fix = atoi(argv[++i]);
+			continue;
+		}
+
+		/* whether a single beneficial mutation appears on a single person once, or it may occur several times */
+		if ( (!strcmp(argv[i], "-single_bene" ) ) ){
+			single_bene = '1';
 			continue;
 		}
 

@@ -160,7 +160,7 @@ void area_config(unsigned i, unsigned j){
 	double frc = 0;
 	double grt = 0;
 	A[0][i][j] -> capacity = 50;
-	A[0][i][j] -> growth_rate = 0.3;
+	A[0][i][j] -> growth_rate = 0.2;
 	A[0][i][j] -> friction = 0.5;
 	A[0][i][j] -> migrate = 0.5;
 	return;
@@ -199,7 +199,7 @@ int main(int argc, char** argv){
 
 	cmd_params(argc, argv);
 
-	clock_t start = clock();
+	// clock_t start = clock();
 	srand(seed);
 	const gsl_rng_type * T;
 	gsl_rng_env_setup();
@@ -220,11 +220,11 @@ int main(int argc, char** argv){
 
 	gsl_rng_free(r);
 
-	clock_t end = clock();
-	FILE * f1 = fopen("seedtimesps.txt", "w");
-	float seconds = (float)(end - start) / CLOCKS_PER_SEC;
-	fprintf(f1,"%d %f\n", seed, seconds);
-	fclose(f1);
+	// clock_t end = clock();
+	// FILE * f1 = fopen("seedtimesps.txt", "w");
+	// float seconds = (float)(end - start) / CLOCKS_PER_SEC;
+	// fprintf(f1,"%d %f\n", seed, seconds);
+	// fclose(f1);
 	return 0;
 }
 

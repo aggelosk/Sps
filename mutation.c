@@ -61,7 +61,7 @@ void print_table_sample(){ /* rows are samples, columns are mutations */
 			if (muTable[i][j] == 1)
 			  ++mut_success[j];
 		}
-   	//++ntons[counter];
+	     	//++ntons[counter];
 		fprintf(f1,"\n");
 	}
 	fprintf(f1,"\n");
@@ -173,7 +173,8 @@ void mutate(unsigned nmut){
 	if (ben_pos != -1) /* not yet placed so in final position*/
 		mut_pos[mut - 1] = ben_pos;
 
-	/* sort the mutations to comply with the Hudson's ms format */
+	gsl_permutation_free(perm);
+
 	unsigned swp = 0;
 	for (i = 0; i < mut; ++i){
 		for (j = i + 1; j< mut; ++j){
@@ -190,6 +191,8 @@ void mutate(unsigned nmut){
 		}
 	}
 
+	/* sort the mutations to comply with the Hudson's ms format */
+
 	for (i = 0; i < mut; ++i){
 		rp = rand() % total;
 		misses = 0;
@@ -200,7 +203,7 @@ void mutate(unsigned nmut){
 			else
 				++misses;
 		}
-		if (misses != j)
+		if (misses != j || misses == 0)
 			poly[i] = 1;
 		++ntons[anc[rp].presentChildren];
 	}

@@ -845,7 +845,10 @@ void rewind_time(){
 	unsigned i;
 	for (i = 0; i <= samples; ++i)
 		affect[i] = 0;
+
+  // fprintf(stderr, "\nSAMPLING DONE\n");
 	go_back();
+  // fprintf(stderr, "\nWENT BACK\n");
 	assert(head != NULL);
 	keepsake = People[0]; 	/* keep track of the people we have in generation zero */
 	if ( prev_gen > 1 )		  /* meaning we partially "failed" to trace the MRCA during the initial traceback */
@@ -855,6 +858,7 @@ void rewind_time(){
   print_coords();
 	destruction();         /* not useful anymore so no need to keep all this memory allocated */
 	free(affect);
+	// fprintf (stderr, " \nREWIND COMPLETE\n");
 }
 
 /* ------------------------------------------------------------------------------------------------- BRIEF SUMMARY OF THE CODE ------------------------------------------------------------------------------------------------- */

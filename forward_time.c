@@ -18,7 +18,10 @@ unsigned columns = 5;
 
 double ben_chance = 0.001;
 unsigned ben_gen = 10;
-float fitness = 1.01;
+char single_bene = '0'; 		/* whether we only have a single beneficial mutation or not ~ Default is not */
+int gen_after_fix = -1; 		/* if this value takes a positive value, we keep on running # generation after fixation happens */
+double fitness = 1.01;
+short fixation = 0; 				/* check whether we have reached fixation */
 double rec_rate = 0.01;			/* probability of recombination occuring at any given person */
 
 unsigned long int no_children = 0;
@@ -78,9 +81,9 @@ void migration(unsigned i, unsigned j, person * child){	/* will move the entity 
 							 nxtstep -> immigrants = realloc( nxtstep -> immigrants, (nxtstep -> incoming + 1) * sizeof(person) );
 							 memcpy(&nxtstep -> immigrants[nxtstep -> incoming], child, sizeof(person));
 						}
-						++nxtstep -> incoming;
+						nxtstep -> incoming++;
 						if (child -> fitness > 1)
-							++nxtstep -> fit_people;
+							nxtstep -> fit_people++;
 						return;
 					}
 					else
@@ -107,7 +110,7 @@ unsigned binary_search(unsigned i, unsigned j, unsigned l, unsigned r, double x)
       return binary_search(i, j, mid + 1, r, x);
   }
 	else if (r - l == 1){ /* either left or right is the correct answer so found it */
-		if (current -> people[l].fitness <= x )
+		if (current -> people[l].fitness >= x )
 			return l;
 		return r;
 	}
@@ -127,7 +130,7 @@ person * birth(unsigned i, unsigned j, person * child){
 	unsigned p1 = 0;
 	unsigned p2 = current -> population + 1; /* invalid for now might be changed later */
 	double recombination = ((float)rand()/(float)(RAND_MAX));
-	if (current -> fit_people && current -> fit_people != current -> population){ /* there are fit people ~ all fit == noone is fit */
+	if (current -> fit_people && current -> fit_people != current -> population){
 		unsigned max = current-> population -1;
 		double x = ((float)rand()/(float)(RAND_MAX)) * current -> people[max].fitness;
 		p1 = binary_search(i, j, 0, max, x);
@@ -136,6 +139,14 @@ person * birth(unsigned i, unsigned j, person * child){
 			while (p2 == p1 && !single_parent)
 				p2 = binary_search(i, j, 0, max, x);
 			child -> parent2 = &current -> people[p2];
+		}
+	}
+	else if (current -> fit_people == current -> population){
+		fixation = 1;
+		p1 = rand() % current -> population;
+		if (recombination < rec_rate ){
+			while (p2 == p1 && !single_parent)
+				p2 = rand() % current -> population;
 		}
 	}
 	else{
@@ -148,7 +159,7 @@ person * birth(unsigned i, unsigned j, person * child){
 	child -> parent1 = &current -> people[p1];
 
 	/* now we need to calculate the child's fitness */
-	if (recombination < rec_rate && current -> fit_people){
+	if (recombination < rec_rate && current -> fit_people > 0 && current -> fit_people < current -> population){
 		double f1 = 0;
 		double f2 = 0;
 		if (((float)rand()/(float)(RAND_MAX)) < 0.5){ /* fitness comes from the first parent */
@@ -172,14 +183,20 @@ person * birth(unsigned i, unsigned j, person * child){
 		}
 	}
 	else{
-		if (p1)
+		if (p1 != 0)
 			child -> fitness = child -> parent1 -> fitness - current -> people[p1-1].fitness; /* since fitness is cumulative */
 		else
 			child -> fitness = child -> parent1 -> fitness;
 	}
 
+	/* case where a single fit child is supposed to be initialized */
+	if (event_number == ben_gen && single_bene == '1'){
+		child -> fitness = fitness;
+		single_bene = 0;
+		ben_gen = steps + 1;
+	}
 	/* case where a new beneficial mutation appears */
-	if (child -> fitness == 1 && event_number >= ben_gen){
+	else if ( event_number >= ben_gen){
 		double mutation = ((float)rand()/(float)(RAND_MAX));
 		if (mutation <= ben_chance)
 			child -> fitness = fitness;
@@ -199,6 +216,8 @@ unsigned long int reproduce(unsigned i, unsigned j){
 		nxtstep -> people = malloc(new_pop * sizeof(person));
 	else
 		assert(0);
+/*	if (event_number >= 1000 && j != 0)
+		fprintf(stderr, "old %u, new pop [%u %u %u] %lu \n", current->population, event_number, i, j, new_pop); */
 	unsigned mig_pop = 0;
 	/* we now need to decide the parents of each kid and the place of birth*/
 	unsigned pos = 0;
@@ -210,12 +229,13 @@ unsigned long int reproduce(unsigned i, unsigned j){
 		migrate = rand() / (float)RAND_MAX;
 		if ( ( migrate < current -> migrate ) && ( nxtstep -> total_fric > 0) ){
 			migration(i, j, &nxtstep -> people[pos]);
-			++mig_pop;
+		 	++mig_pop;
 		}
 		else{
 			/* cumulative fitness allows for easier parental selection in the next generation */
-			if (nxtstep -> people[pos].fitness > 1)
-				++nxtstep -> fit_people;
+			if (nxtstep -> people[pos].fitness > 1){
+				nxtstep -> fit_people++;
+			}
 			if (pos != 0)
 				nxtstep -> people[pos].fitness += nxtstep -> people[pos - 1].fitness;
 			++pos;
@@ -256,6 +276,7 @@ void intergrate_migration(unsigned i, unsigned j){
 /* --------------------------------- AFTER HERE WE ARE DONE --------------------------------- */
 
 void event(){
+	unsigned fit_everywhere = 0;
 	unsigned i, j;
 	total_people = 0; /* each generation obviously starts with 0 people */
 	for (i = 0; i < rows; ++i){
@@ -264,7 +285,15 @@ void event(){
 				intergrate_migration(i,j);
 			if (current -> population > 0 && nxtstep -> capacity > 0) /* inhabitated areas only */
 					nxtstep -> population = reproduce(i,j);
+					fit_everywhere += nxtstep -> fit_people;
 		}
+	}
+	if (single_bene && ben_gen > steps && fit_everywhere == 0){ /* mutation lost and in this scenario the simulation no longer has a purpose */
+		fprintf(stderr, "No fit people remaining in generation %u \n", event_number);
+		assert(0);
+	}
+	else if (fit_everywhere == total_people){
+		fixation = 1;
 	}
 	People[++event_number] = total_people;
 }
@@ -318,12 +347,24 @@ void forward_time(){
 	People = malloc(sizeof(unsigned) * steps);
 	People[0] = total_people;
 
+	int gen_of_fix = -1;
 	unsigned i;
 	for (i = 0; i < steps - 1; ++i){
 		if (People[event_number] == 0){
 			fprintf(stderr, " \nThere are no people left so there is no point in continuing this simulation\n");
 			break;
 		}
+		if ( gen_after_fix != -1 && fixation == 1 && gen_of_fix == -1){
+				gen_of_fix = event_number;
+				fixation = 2; /* just to avoid re-entering this block of code */
+		}
+		if ( fixation != 0 && (gen_of_fix + gen_after_fix) == event_number ){ /* when this happens we end the simulation */
+			FILE * ff = fopen("gen_of_fix.txt", "w");
+			fprintf(ff, "%u\n", event_number);
+			fclose(ff);
+			break;
+		}
+
 		event();
 	}
 

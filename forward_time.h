@@ -1,3 +1,4 @@
+#include <omp.h>
 #include "spot.h"
 
 unsigned logistic_function(unsigned i, unsigned j);
