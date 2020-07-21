@@ -7,7 +7,7 @@ time_t t;
 
 extern spot **** A;
 
-unsigned event_number = 0; 				 /* number of current event - shows the number of entries in the event table */
+unsigned event_number = 0; 				 			/* number of current event - shows the number of entries in the event table */
 unsigned long int total_people = 0;			/* total number of people encountered in the forward in time step */
 unsigned long int unique_id = 0;
 
@@ -17,33 +17,34 @@ unsigned columns = 5;
 /* default values */
 
 double ben_chance = 0.001;
-unsigned ben_gen = 10;
-char single_bene = '0'; 		/* whether we only have a single beneficial mutation or not ~ Default is not */
-int gen_after_fix = -1; 		/* if this value takes a positive value, we keep on running # generation after fixation happens */
+int ben_gen = 10;
+char single_bene = '0'; 								/* whether we only have a single beneficial mutation or not ~ Default is not */
+int gen_after_fix = -1; 								/* if this value takes a positive value, we keep on running # generation after fixation happens */
 double fitness = 1.01;
-short fixation = 0; 				/* check whether we have reached fixation */
-double rec_rate = 0.01;			/* probability of recombination occuring at any given person */
+short fixation = 0; 										/* check whether we have reached fixation */
+double rec_rate = 0.01;									/* probability of recombination occuring at any given person */
 
 unsigned long int no_children = 0;
 unsigned pop_counter = 0;
 
-unsigned cram = -1; 					/* at a certain generation the user may choose to prune the tree to reduce the total ram of the code */
+unsigned cram = -1; 										/* at a certain generation the user may choose to prune the tree to reduce the total ram of the code */
 ram * ram_h;
 
-unsigned * People; 					/* holds the population for each generation */
-leader * Leaders; 					/* for the mass - migration model. Shows which population tends to follow which */
+unsigned * People; 											/* holds the population for each generation */
+leader * Leaders; 											/* for the mass - migration model. Shows which population tends to follow which */
 
-extern char ancs; 					/* determines whether we use ancestral sampling */
+extern char ancs; 											/* determines whether we use ancestral sampling */
 
 extern void show_the_model(unsigned gen);
 
+unsigned fit_everywhere = 0;
 /* -------------------------------------------------------------------------------------------- */
 
 
-/* -------------------------- Different scenario activators ------------------------------------- */
+/* ------------------------------ Different scenario activators ----------------------------------------- */
 char single_parent = 1;							/* default is to allows single parented children */
 char beneficial = 0;								/* default is to not allow such a thing */
-char flock = 0;										/* default is not to allow such a thing */
+char flock = 0;											/* default is not to allow such a thing */
 /* ------------------------------------------------------------------------------------------------------ */
 
 unsigned logistic_function(unsigned i, unsigned j){
@@ -201,12 +202,13 @@ person * birth(unsigned i, unsigned j, person * child){
 		if (mutation <= ben_chance)
 			child -> fitness = fitness;
 	}
+
+	if (child -> fitness > 1)
+		fit_everywhere++;
+
 	assert(child); /* just a safety clause, should never be triggered */
 	return child;
 }
-
-
-/* --------------------- mass migration end ------------------- */
 
 unsigned long int reproduce(unsigned i, unsigned j){
 	assert(current -> population != 0);
@@ -227,15 +229,14 @@ unsigned long int reproduce(unsigned i, unsigned j){
 		nxtstep -> people[pos] = *birth(i, j, &nxtstep -> people[pos]);
 		/* now we need to choose the destination of the newborn child */
 		migrate = rand() / (float)RAND_MAX;
-		if ( ( migrate < current -> migrate ) && ( nxtstep -> total_fric > 0) ){
+		if ( ( migrate < current -> migrate ) && ( nxtstep -> total_fric > 0 ) ){
 			migration(i, j, &nxtstep -> people[pos]);
-		 	++mig_pop;
+			++mig_pop;
 		}
 		else{
 			/* cumulative fitness allows for easier parental selection in the next generation */
-			if (nxtstep -> people[pos].fitness > 1){
+			if ( nxtstep -> people[pos].fitness > 1 )
 				nxtstep -> fit_people++;
-			}
 			if (pos != 0)
 				nxtstep -> people[pos].fitness += nxtstep -> people[pos - 1].fitness;
 			++pos;
@@ -276,25 +277,37 @@ void intergrate_migration(unsigned i, unsigned j){
 /* --------------------------------- AFTER HERE WE ARE DONE --------------------------------- */
 
 void event(){
-	unsigned fit_everywhere = 0;
+	fit_everywhere = 0;
 	unsigned i, j;
 	total_people = 0; /* each generation obviously starts with 0 people */
+	unsigned areas_on_capacity = 0;
 	for (i = 0; i < rows; ++i){
 		for (j = 0; j < columns; ++j){
 			if (current -> incoming > 0)	 /* if there are immigrants coming to this area */
 				intergrate_migration(i,j);
+			if (current -> population == current -> capacity)
+				++areas_on_capacity;
 			if (current -> population > 0 && nxtstep -> capacity > 0) /* inhabitated areas only */
-					nxtstep -> population = reproduce(i,j);
-					fit_everywhere += nxtstep -> fit_people;
+				nxtstep -> population = reproduce(i,j);
+				// nxtstep -> population = mass_migration(i,j);
 		}
 	}
+	// print_population();
+
+	FILE * f1 = fopen("qifsha.txt", "a");
+	float logos = (float)fit_everywhere/ total_people;
+	fprintf(f1, "%lf\n", logos );
+	fclose(f1);
+
+	if (ben_gen == -1 && areas_on_capacity == (rows * columns)) /* if every area on the map has reached it's capacity */
+		ben_gen == steps + 1;
+
 	if (single_bene && ben_gen > steps && fit_everywhere == 0){ /* mutation lost and in this scenario the simulation no longer has a purpose */
 		fprintf(stderr, "No fit people remaining in generation %u \n", event_number);
 		assert(0);
 	}
-	else if (fit_everywhere == total_people){
+	else if (logos == 1.0)
 		fixation = 1;
-	}
 	People[++event_number] = total_people;
 }
 
@@ -309,19 +322,16 @@ void print_people(){
 }
 
 void print_population(){ /* prints the people in each area */
+
 	FILE * f1 = fopen("population.txt", "a");
 	unsigned i;
 	unsigned j = 0;
 	unsigned x = 0;
-	fprintf(f1, "Event: %d\n", event_number);
 	for (i = 0; i < rows; ++i){
-		for (j = 0; j < columns; ++j){
-			for (x = 0; x < current -> population; ++x)
-				fprintf(f1, "%u %u ", current -> people[x].parent1 -> pid, current -> people[x].parent2 -> pid);
-		}
+		for (j = 0; j < columns; ++j)
+			fprintf(f1, "%u ", current -> population);
 		fprintf(f1, "\n");
 	}
-	fprintf(f1, "-----\n");
 	fclose(f1);
 }
 
