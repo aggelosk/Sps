@@ -218,6 +218,10 @@ int main(int argc, char** argv){
 		nmut = (int)gsl_ran_poisson(r, theta * total);
 	mutate(nmut);
 
+	FILE * ft = fopen("total_tree.txt", "w");
+	fprintf(ft, "%d\n", total);
+	fclose(ft);
+
 	gsl_rng_free(r);
 
 	// clock_t end = clock();
