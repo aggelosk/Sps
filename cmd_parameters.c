@@ -30,7 +30,6 @@ extern unsigned steps;
 extern unsigned rows;
 extern unsigned columns;
 extern double fitness;
-extern double ben_chance;
 extern unsigned ben_gen;
 extern char single_bene;
 extern int gen_after_fix;
@@ -304,20 +303,14 @@ void cmd_params(int argc, char** argv){
 		if ( (!strcmp(argv[i], "-bene" ) ) ){
 			ben_gen = atoi(argv[++i]);
 			ben_pos = atoi(argv[++i]);
-			ben_chance = atof(argv[++i]);
 			fitness = atof(argv[++i]);
+			single_bene = '1';
 			continue;
 		}
 
 		/* how many generations to run post fixation of beneficial mutation */
 		if ( (!strcmp(argv[i], "-fixg" ) ) ){
 			gen_after_fix = atoi(argv[++i]);
-			continue;
-		}
-
-		/* whether a single beneficial mutation appears on a single person once, or it may occur several times */
-		if ( (!strcmp(argv[i], "-single_bene" ) ) ){
-			single_bene = '1';
 			continue;
 		}
 

@@ -350,9 +350,7 @@ void recombine(speciment * s){
 					seg1 -> next = malloc(sizeof(segment));
           memcpy(seg1 -> next, tmp, sizeof(segment));
 					seg1 -> next -> coords = malloc(sizeof(coord));
-					seg1 -> next -> coords -> r = tmp -> coords -> r;
-					seg1 -> next -> coords -> c = tmp -> coords -> c;
-          seg1 -> next -> coords -> next = tmp -> coords -> next;
+          memcpy(seg1 -> next -> coords, tmp -> coords, sizeof(coord));
 					seg1 -> next -> next = NULL;
 					seg1 = seg1 -> next;
 				}
@@ -361,9 +359,7 @@ void recombine(speciment * s){
 					seg1 -> start = tmp -> start;
 					seg1 -> end = tmp -> end;
           seg1 -> coords = malloc(sizeof(coord));
-          seg1 -> coords -> r = tmp -> coords -> r;
-          seg1 -> coords -> c = tmp -> coords -> c;
-          seg1 -> coords -> next = tmp -> coords -> next;
+          memcpy(seg1 -> coords, tmp -> coords, sizeof(coord));
 					seg1 -> next = NULL;
 					ch1 -> segments = seg1;
 				}
@@ -374,9 +370,7 @@ void recombine(speciment * s){
 					seg1 -> next -> start = tmp -> start;
 					seg1 -> next -> end = cutting_point;
           seg1 -> next -> coords = malloc(sizeof(coord));
-          seg1 -> next -> coords -> r = tmp -> coords -> r;
-          seg1 -> next -> coords -> c = tmp -> coords -> c;
-          seg1 -> next -> coords -> next = tmp -> coords -> next;
+          memcpy(seg1 -> next -> coords, tmp -> coords, sizeof(coord));
 					seg1 -> next -> next = NULL;
 					seg1 = seg1 -> next;
 				}
@@ -385,9 +379,7 @@ void recombine(speciment * s){
 					seg1 -> start = tmp -> start;
 					seg1 -> end = cutting_point;
           seg1 -> coords = malloc(sizeof(coord));
-          seg1 -> coords -> r = tmp -> coords -> r;
-          seg1 -> coords -> c = tmp -> coords -> c;
-          seg1 -> coords -> next = tmp -> coords -> next;
+          memcpy(seg1 -> coords, tmp -> coords, sizeof(coord));
 					seg1 -> next = NULL;
 					ch1 -> segments = seg1;
 				}
@@ -397,9 +389,7 @@ void recombine(speciment * s){
 						seg2 -> next -> start = cutting_point + 1;
 						seg2 -> next -> end = tmp -> end;
             seg2 -> next -> coords = malloc(sizeof(coord));
-            seg2 -> next -> coords -> r = tmp -> coords -> r;
-            seg2 -> next -> coords -> c = tmp -> coords -> c;
-            seg2 -> next ->coords -> next = tmp -> coords -> next;
+            memcpy(seg2 -> next -> coords, tmp -> coords, sizeof(coord));
 						seg2 -> next -> next = NULL;
 						seg2 = seg2 -> next;
 					}
@@ -408,9 +398,7 @@ void recombine(speciment * s){
 						seg2 -> start = cutting_point + 1;
 						seg2 -> end = tmp -> end;
             seg2 -> coords = malloc(sizeof(coord));
-            seg2 -> coords -> r = tmp -> coords -> r;
-            seg2 -> coords -> c = tmp -> coords -> c;
-            seg2 -> coords -> next = tmp -> coords -> next;
+            memcpy(seg2 -> coords, tmp -> coords, sizeof(coord));
 						seg2 -> next = NULL;
 						ch2 -> segments = seg2;
 					}
@@ -424,9 +412,7 @@ void recombine(speciment * s){
 				seg2 -> next -> start = tmp -> start;
 				seg2 -> next -> end = tmp -> end;
         seg2 -> next -> coords = malloc(sizeof(coord));
-        seg2 -> next -> coords -> r = tmp -> coords -> r;
-        seg2 -> next -> coords -> c = tmp -> coords -> c;
-        seg2 -> next ->coords -> next = tmp -> coords -> next;
+        memcpy(seg2 -> next -> coords, tmp -> coords, sizeof(coord));
 				seg2 -> next -> next = NULL;
 				seg2 = seg2 -> next;
 			}
@@ -435,9 +421,7 @@ void recombine(speciment * s){
 				seg2 -> start = tmp -> start;
 				seg2 -> end = tmp -> end;
         seg2 -> coords = malloc(sizeof(coord));
-        seg2 -> coords -> r = tmp -> coords -> r;
-        seg2 -> coords -> c = tmp -> coords -> c;
-        seg2 -> coords -> next = tmp -> coords -> next;
+        memcpy(seg2 -> coords, tmp -> coords, sizeof(coord));
 				seg2 -> next = NULL;
 				ch2 -> segments = seg2;
 			}
@@ -475,7 +459,6 @@ void recombine(speciment * s){
 
 void choose_parent(speciment* s){
 	/* first we check for recombination */
-	float recombination = ((float)rand()/(float)(RAND_MAX));
 	if (s -> prs -> parent2 != NULL){
 		recombine(s);
 		return;
@@ -820,6 +803,7 @@ void print_segments(segment * tmp){
 
 /* sort of a main for this step */
 void rewind_time(){
+  fprintf(stderr, "%d\n", ben_pos);
 	if (samples == 0)
 		samples = DEFAULT_SAMPLES;
 	currK = 2*samples;
@@ -851,8 +835,10 @@ void rewind_time(){
   // fprintf(stderr, "\nWENT BACK\n");
 	assert(head != NULL);
 	keepsake = People[0]; 	/* keep track of the people we have in generation zero */
-	if ( prev_gen > 1 )		  /* meaning we partially "failed" to trace the MRCA during the initial traceback */
-	  	further_back();
+	if ( prev_gen > 1 ){		  /* meaning we partially "failed" to trace the MRCA during the initial traceback */
+    fprintf(stderr, "more gens\n");
+    	further_back();
+  }
 	assert(head != NULL);
 	add_present(head);
   print_coords();

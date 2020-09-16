@@ -16,11 +16,10 @@ unsigned rows = 5;
 unsigned columns = 5;
 /* default values */
 
-double ben_chance = 0.001;
-int ben_gen = 10;
+int ben_gen = -1;
 char single_bene = '0'; 								/* whether we only have a single beneficial mutation or not ~ Default is not */
 int gen_after_fix = -1; 								/* if this value takes a positive value, we keep on running # generation after fixation happens */
-double fitness = 1.01;
+double fitness = 1.0;										/* fitness of a fit person ~ Default is == 1 to signal that we have a neutral scenario */
 short fixation = 0; 										/* check whether we have reached fixation */
 double rec_rate = 0.01;									/* probability of recombination occuring at any given person */
 
@@ -130,9 +129,11 @@ person * birth(unsigned i, unsigned j, person * child){
 	child -> col = j;
 	unsigned p1 = 0;
 	unsigned p2 = current -> population + 1; /* invalid for now might be changed later */
+
 	double recombination = ((float)rand()/(float)(RAND_MAX));
+	/* scenario where not everyone has the same fitness */
 	if (current -> fit_people && current -> fit_people != current -> population){
-		unsigned max = current-> population -1;
+		unsigned max = current-> population - 1;
 		double x = ((float)rand()/(float)(RAND_MAX)) * current -> people[max].fitness;
 		p1 = binary_search(i, j, 0, max, x);
 		if (recombination < rec_rate ){
@@ -142,17 +143,10 @@ person * birth(unsigned i, unsigned j, person * child){
 			child -> parent2 = &current -> people[p2];
 		}
 	}
-	else if (current -> fit_people == current -> population){
-		fixation = 1;
-		p1 = rand() % current -> population;
-		if (recombination < rec_rate ){
-			while (p2 == p1 && !single_parent)
-				p2 = rand() % current -> population;
-		}
-	}
 	else{
 		p1 = rand() % current -> population;
 		if (recombination < rec_rate ){
+			p2 = rand() % current -> population;
 			while (p2 == p1 && !single_parent)
 				p2 = rand() % current -> population;
 		}
@@ -160,25 +154,24 @@ person * birth(unsigned i, unsigned j, person * child){
 	child -> parent1 = &current -> people[p1];
 
 	/* now we need to calculate the child's fitness */
-	if (recombination < rec_rate && current -> fit_people > 0 && current -> fit_people < current -> population){
+	if (child -> parent2 != NULL){
 		double f1 = 0;
 		double f2 = 0;
 		if (((float)rand()/(float)(RAND_MAX)) < 0.5){ /* fitness comes from the first parent */
-			if (p1)
-				f1 = child -> parent1 -> fitness - current -> people[p1-1].fitness; /* since fitness is cumulative */
+			if (p1 != 0)
+				f1 = child -> parent1 -> fitness - current -> people[p1 - 1].fitness; /* since fitness is cumulative */
 			else
 				f1 = child -> parent1 -> fitness;
 			child -> fitness = f1;
 		}
 		else{
-			if (p2)
-				f2 = child -> parent2 -> fitness - current -> people[p2-1].fitness; /* since fitness is cumulative */
+			if (p2 != 0)
+				f2 = child -> parent2 -> fitness - current -> people[p2 - 1].fitness; /* since fitness is cumulative */
 			else
 				f2 = child -> parent2 -> fitness;
 			child -> fitness = f2;
-		}
-		/* case where parent2 carries the beneficial mutation unlike parent1 ~ swap to help us in rewind*/
-		if (f2 > f1){
+
+			/* we make it so that the first parent is the one that gave the segment with the selection site */
 			child -> parent1 = &current -> people[p2];
 			child -> parent2 = &current -> people[p1];
 		}
@@ -188,19 +181,14 @@ person * birth(unsigned i, unsigned j, person * child){
 			child -> fitness = child -> parent1 -> fitness - current -> people[p1-1].fitness; /* since fitness is cumulative */
 		else
 			child -> fitness = child -> parent1 -> fitness;
+		assert(child -> parent2 == NULL); /* just a safety clause should never be triggered */
 	}
 
 	/* case where a single fit child is supposed to be initialized */
 	if (event_number == ben_gen && single_bene == '1'){
 		child -> fitness = fitness;
-		single_bene = 0;
+		single_bene = '0';
 		ben_gen = steps + 1;
-	}
-	/* case where a new beneficial mutation appears */
-	else if ( event_number >= ben_gen){
-		double mutation = ((float)rand()/(float)(RAND_MAX));
-		if (mutation <= ben_chance)
-			child -> fitness = fitness;
 	}
 
 	if (child -> fitness > 1)
@@ -285,24 +273,25 @@ void event(){
 		for (j = 0; j < columns; ++j){
 			if (current -> incoming > 0)	 /* if there are immigrants coming to this area */
 				intergrate_migration(i,j);
-			if (current -> population == current -> capacity)
-				++areas_on_capacity;
+			// if (current -> population >= current -> capacity)
+			// 	++areas_on_capacity;
 			if (current -> population > 0 && nxtstep -> capacity > 0) /* inhabitated areas only */
 				nxtstep -> population = reproduce(i,j);
 				// nxtstep -> population = mass_migration(i,j);
 		}
 	}
 	// print_population();
+	float logos = (float)fit_everywhere / total_people;
+	if (fitness != 1.0){
+		FILE * f1 = fopen("fit_percentage.txt", "a");
+		fprintf(f1, "%lf\n", logos );
+		fclose(f1);
+	}
 
-	FILE * f1 = fopen("qifsha.txt", "a");
-	float logos = (float)fit_everywhere/ total_people;
-	fprintf(f1, "%lf\n", logos );
-	fclose(f1);
+	// if (ben_gen == -1 && areas_on_capacity == (rows * columns)) /* if every area on the map has reached it's capacity */
+	// 	ben_gen == steps + 1;
 
-	if (ben_gen == -1 && areas_on_capacity == (rows * columns)) /* if every area on the map has reached it's capacity */
-		ben_gen == steps + 1;
-
-	if (single_bene && ben_gen > steps && fit_everywhere == 0){ /* mutation lost and in this scenario the simulation no longer has a purpose */
+	if (fitness != 1.0 && single_bene != '1' && ben_gen > steps && fit_everywhere == 0){ /* mutation lost and in this scenario the simulation no longer has a purpose */
 		fprintf(stderr, "No fit people remaining in generation %u \n", event_number);
 		assert(0);
 	}
@@ -354,8 +343,14 @@ void destruction(){ /* frees all the allocated memory */
 
 /* sort of a main for this section */
 void forward_time(){
+
 	People = malloc(sizeof(unsigned) * steps);
 	People[0] = total_people;
+
+	/* we set a trigger to stop the simulation in case there was no fixation */
+	unsigned stop = 1;
+	if (single_bene == '1')
+		stop = 0;
 
 	int gen_of_fix = -1;
 	unsigned i;
@@ -364,18 +359,24 @@ void forward_time(){
 			fprintf(stderr, " \nThere are no people left so there is no point in continuing this simulation\n");
 			break;
 		}
-		if ( gen_after_fix != -1 && fixation == 1 && gen_of_fix == -1){
+		if (fixation == 1 && gen_of_fix == -1){
 				gen_of_fix = event_number;
 				fixation = 2; /* just to avoid re-entering this block of code */
 		}
-		if ( fixation != 0 && (gen_of_fix + gen_after_fix) == event_number ){ /* when this happens we end the simulation */
+		if ( fixation != 0 && (gen_of_fix + gen_after_fix) == event_number ){ /* we end the forward in time process */
 			FILE * ff = fopen("gen_of_fix.txt", "w");
 			fprintf(ff, "%u\n", event_number);
 			fclose(ff);
+			stop = 1;
 			break;
 		}
-
 		event();
+	}
+
+	/* unless we have fixation the results are useless to us thus we end the simulation here */
+	if (stop == 0){
+		fprintf(stderr, "Did not reach fixation thus the simulation ends\n");
+		assert(0);
 	}
 
 	unsigned x, y;

@@ -28,7 +28,7 @@ unsigned invalid = 0; /* mutations that did not affect anyone */
 
 char * poly;
 short ** muTable;					/* a table where we store the mutations */
-unsigned * ntons;
+unsigned * ntons = NULL;
 unsigned * mut_pos;					/* position each mutation landed */
 
 extern gsl_rng * r;
@@ -36,13 +36,18 @@ extern gsl_rng * r;
 void print_table_sample(){ /* rows are samples, columns are mutations */
 	//printf("PRINT MUTATIONS\n");
 
-	unsigned * mut_success = calloc( mut, sizeof(unsigned));
+   unsigned * mut_success = calloc( mut, sizeof(unsigned));
 
 	unsigned i,j, counter = 0;
 	for (i = 0; i < mut; ++i){
-		if (poly[i] == 0)
-			++invalid;
+	  if (poly[i] == 0)
+	    ++invalid;
 	}
+
+	assert(ntons != NULL);
+
+	/* for(i = 0; i <= samples; ++i) */
+	/*   ntons[i] = 0; */
 
 	FILE  * f1;
 	f1 = fopen("mutation_table.txt", "w");
@@ -67,11 +72,14 @@ void print_table_sample(){ /* rows are samples, columns are mutations */
 	fprintf(f1,"\n");
 	fclose(f1);
 
+	
+
 	for (i = 0; i < mut; ++i)
 	  ++ntons[mut_success[i]];
 
 	FILE  * f2;
 	f2 = fopen("ntons.txt", "w");
+	fprintf(f2, "%d\t", mut);
 	for (j = 0; j <= samples; ++j)
 		fprintf (f2,"%d ", ntons[j]);
 	fprintf(f2, "\n");
@@ -205,7 +213,8 @@ void mutate(unsigned nmut){
 		}
 		if (misses != j || misses == 0)
 			poly[i] = 1;
-		++ntons[anc[rp].presentChildren];
+		
+		//++ntons[anc[rp].presentChildren];
 	}
 	print_table_sample();
 	freedom(samples);
